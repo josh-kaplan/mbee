@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <%
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module views.layout
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
+ *
+ * @owner James Eckstein
+ *
+ * @author Josh Kaplan
+ * @author Jake Ursetta
+ * @author Leah De Laurell
  *
  * @description The layout file is the base template for all other views.
  */
@@ -48,12 +54,12 @@
 
     <!-- Scripts -->
     <script type="text/javascript" src="/js/jquery.min.js"></script>
-    <script type="text/javascript" src="/js/jquery-ui-min.js"></script>
-    <script type="text/javascript" src="/js/popper.min.js"></script>
-    <script type="text/javascript" src="/js/bootstrap.min.js"></script>
-    <script type="text/javascript" src="/js/mbee.js"></script>
+    <script async type="text/javascript" src="/js/jquery-ui.min.js"></script>
+    <script async type="text/javascript" src="/js/popper.min.js"></script>
+    <script async type="text/javascript" src="/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="/js/mbee.min.js"></script>
     <!-- React Scripts -->
-    <script type="text/javascript" src="/react-js/navbar.js"></script>
+    <script type="text/javascript" src="/js/navbar.js"></script>
     <!-- Custom Scripts -->
     <%- defineContent('scripts') %>
   </body>

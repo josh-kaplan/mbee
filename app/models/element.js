@@ -1,5 +1,7 @@
+/* eslint-disable jsdoc/require-description-complete-sentence */
+// Disabled to allow html in description
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module models.element
  *
@@ -7,50 +9,76 @@
  *
  * @license MIT
  *
+ * @owner Phillip Lee
+ *
+ * @author Austin Bieber
+ * @author Josh Kaplan
+ *
  * @description
- * <p>Defines the element data model. Using
- * <a href="http://mongoosejs.com/docs/discriminators.html">
- * Mongoose discriminators</a>, different 'types' of elements are defined such
- * that each inherit the base schema from the generic 'Element'.</p>
+ * <p>This module defines the element data model. Elements are the core of MBEE
+ * and are the individual components of a model. Elements are stored under
+ * branches, which are stored in projects. Elements have many unique fields
+ * including a reference the the element's parent, a reference to a source and
+ * target, a type, and a documentation section. Elements also have three virtual
+ * fields which are not stored in the database and can optionally be calculated
+ * and returned post-find. Elements also have the ability to store custom
+ * meta-data.</p>
  *
- * <p>The following element types are defined: Block, Relationship, and Package.
- * </p>
+ * <h4>Parent</h4>
+ * <p>The parent field stores the concatenated id of the current element's
+ * parent. This is a required field, and the only element which should not have
+ * a parent is the root model element, whose parent value is null.</p>
  *
- * <p><b>Block</b> does not extend the Element schema other
- * than adding the 'type' of 'Block'.</p>
+ * <h4>Source and Target</h4>
+ * <p>Both source and target store concatenated ids of other elements which they
+ * reference. When creating relationship types in a model, the source and target
+ * should be populated. If an element is not a relationship type, the source
+ * and target will default to null. Both source and target are required
+ * together, one cannot provide only a source or only a target.</p>
  *
- * <p><b>Relationship</b> adds 'source' and 'target' fields that reference
- * other elements, allowing relationships to represent a link between other
- * elements.</p>
+ * <h4>Type</h4>
+ * <p>The type field allows users to store an arbitrary type of an element. Some
+ * types are mapped to specific icons in the UI, but apart from that the type
+ * is not used internally in MBEE.</p>
  *
- * <p><b>Package</b> adds a 'contains' field which references other elements,
- * allowing packages to be used to structure the model.</p>
+ * <h4>Documentation</h4>
+ * <p>The documentation field allows users to store arbitrary text about a
+ * certain element. The documentation field is included with the name in a
+ * "text" index, and can be searched through using a text search.</p>
  *
- * <p>A project will have one root element whose "parent" field will
- * be null. All other elements will have a parent that should be a package (
- * either the root package or some other package in the hierarchy).</p>
+ * <h4>Virtuals</h4>
+ * <p>Elements support three virtuals: contains, sourceOf and targetOf. These
+ * fields are not stored in the database, and are rather calculated after an
+ * element has been found. Contains returns an array of elements whose parent
+ * field is equal to the current element's id and sourceOf and targetOf return
+ * arrays of elements whose source/target field is the current element's id.
+ * Virtuals <b>MUST</b> be populated in the find operation to be returned.</p>
+ *
+ * <h4>Custom Data</h4>
+ * <p>Custom data is designed to store any arbitrary JSON meta-data. Custom data
+ * is stored in an object, and can contain any valid JSON the user desires.
+ * Only users with write and admin permissions on the project can update the
+ * element's custom data. The field "custom" is common to all models, and is
+ * added through the extensions plugin.</p>
  */
 
-// NPM modules
-const mongoose = require('mongoose');
-
 // MBEE modules
-const utils = M.require('lib.utils');
+const db = M.require('db');
 const validators = M.require('lib.validators');
 const extensions = M.require('models.plugin.extensions');
+const utils = M.require('lib.utils');
 
 
-/* ---------------------------( Element Schemas )---------------------------- */
-
+/* ----------------------------( Element Schema )---------------------------- */
 /**
  * @namespace
  *
  * @description The base schema definition inherited by all other element types.
  *
- * @property {string} _id - The elements non-unique element ID.
- * or taken from another source if imported.
- * @property {string} name - THe elements non-unique name.
+ * @property {string} _id - The elements unique element ID.
+ * @property {string} name - The elements non-unique name.
  * @property {string} project - A reference to an element's project.
+ * @property {string} branch - A reference to an element's branch.
  * @property {string} parent - The parent element which contains the element
  * @property {string} source - A reference to the source element if the base
  * element is a relationship. NOTE: If source is provided, target is required.
@@ -58,66 +86,111 @@ const extensions = M.require('models.plugin.extensions');
  * element is a relationship. NOTE: If target is provided, source is required.
  * @property {string} documentation - The element documentation.
  * @property {string} type - An optional type string.
- * @property {Object} custom - JSON used to store additional date.
- *
+ * @property {string} artifact - A reference to an artifact.
  */
-const ElementSchema = new mongoose.Schema({
+const ElementSchema = new db.Schema({
   _id: {
-    type: String,
+    type: 'String',
     required: true,
-    match: RegExp(validators.element.id),
-    maxlength: [110, 'Too many characters in ID'],
-    minlength: [8, 'Too few characters in ID']
+    validate: [{
+      validator: validators.element._id.reserved,
+      message: props => 'Element ID cannot include the following words: '
+        + `[${validators.reserved}].`
+    }, {
+      validator: validators.element._id.match,
+      message: props => `Invalid element ID [${utils.parseID(props.value).pop()}].`
+    }, {
+      validator: validators.element._id.maxLength,
+      // Return a message, with calculated length of element ID (element.max - branch.max - :)
+      message: props => `Element ID length [${props.value.length - validators.branch.idLength - 1}]`
+        + ` must not be more than ${validators.element.idLength - validators.branch.idLength - 1}`
+        + ' characters.'
+    }, {
+      validator: validators.element._id.minLength,
+      // Return a message, with calculated length of element ID (element.min - branch.min - :)
+      message: props => `Element ID length [${props.value.length - 9}] must not`
+        + ' be less than 2 characters.'
+    }]
   },
   name: {
-    type: String
+    type: 'String',
+    default: ''
   },
   project: {
-    type: String,
+    type: 'String',
     required: true,
     ref: 'Project',
-    set: function(_proj) {
-      // Check value undefined
-      if (typeof this.project === 'undefined') {
-        // Return value to set it
-        return _proj;
-      }
-      // Check value NOT equal to db value
-      if (_proj !== this.project) {
-        // Immutable field, return error
-        M.log.warn('Assigned project cannot be changed.');
-      }
-      // No change, return the value
-      return this.project;
-    }
+    validate: [{
+      validator: validators.element.project,
+      message: props => `${props.value} is not a valid project ID.`
+    }],
+    immutable: true
+  },
+  branch: {
+    type: 'String',
+    required: true,
+    ref: 'Branch',
+    index: true,
+    validate: [{
+      validator: validators.element.branch,
+      message: props => `${props.value} is not a valid branch ID.`
+    }],
+    immutable: true
   },
   parent: {
-    type: String,
+    type: 'String',
     ref: 'Element',
-    default: null
+    default: null,
+    index: true,
+    validate: [{
+      validator: validators.element.parent,
+      message: props => `${props.value} is not a valid parent ID.`
+    }]
   },
   source: {
-    type: String,
+    type: 'String',
     ref: 'Element',
-    default: null
+    default: null,
+    index: true,
+    validate: [{
+      validator: validators.element.source.id,
+      message: props => `${props.value} is not a valid source ID.`
+    }, {
+      validator: validators.element.source.target,
+      message: props => 'Target is required if source is provided.'
+    }]
   },
   target: {
-    type: String,
+    type: 'String',
     ref: 'Element',
-    default: null
+    default: null,
+    index: true,
+    validate: [{
+      validator: validators.element.target.id,
+      message: props => `${props.value} is not a valid target ID.`
+    }, {
+      validator: validators.element.target.source,
+      message: props => 'Source is required if target is provided.'
+    }]
   },
   documentation: {
-    type: String,
+    type: 'String',
     default: ''
   },
   type: {
-    type: String,
+    type: 'String',
     index: true,
     default: ''
   },
-  custom: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
+  artifact: {
+    type: 'String',
+    ref: 'Artifact',
+    index: true,
+    default: null,
+    validate: [{
+      validator: validators.element.artifact,
+      message: props => `${props.value} is not a valid artifact ID.`
+    }]
   }
 }); // end of ElementSchema
 
@@ -125,8 +198,23 @@ ElementSchema.virtual('contains', {
   ref: 'Element',
   localField: '_id',
   foreignField: 'parent',
-  justOne: false,
-  default: []
+  justOne: false
+});
+
+// Virtual which stores elements that the retrieved element is a source of
+ElementSchema.virtual('sourceOf', {
+  ref: 'Element',
+  localField: '_id',
+  foreignField: 'source',
+  justOne: false
+});
+
+// Virtual which stores elements that the retrieved element is a target of
+ElementSchema.virtual('targetOf', {
+  ref: 'Element',
+  localField: '_id',
+  foreignField: 'target',
+  justOne: false
 });
 
 /* ---------------------------( Model Plugin )---------------------------- */
@@ -140,203 +228,50 @@ ElementSchema.plugin(extensions);
  * @description Returns element fields that can be changed
  * @memberOf ElementSchema
  */
-ElementSchema.methods.getValidUpdateFields = function() {
-  return ['name', 'documentation', 'custom', 'archived', 'parent', 'type'];
-};
-
-ElementSchema.statics.getValidUpdateFields = function() {
-  return ElementSchema.methods.getValidUpdateFields();
-};
+ElementSchema.static('getValidUpdateFields', function() {
+  return ['name', 'documentation', 'custom', 'archived', 'parent', 'type',
+    'source', 'target', 'artifact'];
+});
 
 /**
  * @description Returns element fields that can be changed in bulk
  * @memberOf ElementSchema
  */
-ElementSchema.methods.getValidBulkUpdateFields = function() {
-  return ['name', 'documentation', 'custom', 'archived', 'type'];
-};
-
-ElementSchema.statics.getValidBulkUpdateFields = function() {
-  return ElementSchema.methods.getValidBulkUpdateFields();
-};
+ElementSchema.static('getValidBulkUpdateFields', function() {
+  return ['name', 'documentation', 'custom', 'archived', 'type', 'source',
+    'target', 'artifact'];
+});
 
 /**
  * @description Returns a list of fields a requesting user can populate
  * @memberOf ElementSchema
  */
-ElementSchema.methods.getValidPopulateFields = function() {
+ElementSchema.static('getValidPopulateFields', function() {
   return ['archivedBy', 'lastModifiedBy', 'createdBy', 'parent', 'source',
-    'target', 'project'];
-};
-
-ElementSchema.statics.getValidPopulateFields = function() {
-  return ElementSchema.methods.getValidPopulateFields();
-};
+    'target', 'project', 'branch', 'sourceOf', 'targetOf', 'contains',
+    'artifact'];
+});
 
 /**
- * @description Returns the element public data
+ * @description Returns a list of valid root elements
  * @memberOf ElementSchema
  */
-ElementSchema.methods.getPublicData = function() {
-  // Parse the element ID
-  const idParts = utils.parseID(this._id);
-
-  let createdBy;
-  let lastModifiedBy;
-  let archivedBy;
-  let parent;
-  let source;
-  let target;
-
-  // If this.createdBy is defined
-  if (this.createdBy) {
-    // If this.createdBy is populated
-    if (typeof this.createdBy === 'object') {
-      // Get the public data of createdBy
-      createdBy = this.createdBy.getPublicData();
-    }
-    else {
-      createdBy = this.createdBy;
-    }
-  }
-
-  // If this.lastModifiedBy is defined
-  if (this.lastModifiedBy) {
-    // If this.lastModifiedBy is populated
-    if (typeof this.lastModifiedBy === 'object') {
-      // Get the public data of lastModifiedBy
-      lastModifiedBy = this.lastModifiedBy.getPublicData();
-    }
-    else {
-      lastModifiedBy = this.lastModifiedBy;
-    }
-  }
-
-  // If this.archivedBy is defined
-  if (this.archivedBy) {
-    // If this.archivedBy is populated
-    if (typeof this.archivedBy === 'object') {
-      // Get the public data of archivedBy
-      archivedBy = this.archivedBy.getPublicData();
-    }
-    else {
-      archivedBy = this.archivedBy;
-    }
-  }
-
-  // If this.parent is defined
-  if (this.parent) {
-    // If this.parent is populated
-    if (typeof this.parent === 'object') {
-      // Get the public data of parent
-      parent = this.parent.getPublicData();
-    }
-    else {
-      parent = utils.parseID(this.parent).pop();
-    }
-  }
-
-  // If this.source is defined
-  if (this.source) {
-    // If this.source is populated
-    if (typeof this.source === 'object') {
-      // Get the public data of source
-      source = this.source.getPublicData();
-    }
-    else {
-      source = utils.parseID(this.source).pop();
-    }
-  }
-
-  // If this.target is defined
-  if (this.target) {
-    // If this.target is populated
-    if (typeof this.target === 'object') {
-      // Get the public data of target
-      target = this.target.getPublicData();
-    }
-    else {
-      target = utils.parseID(this.target).pop();
-    }
-  }
-
-  const data = {
-    id: idParts.pop(),
-    name: this.name,
-    project: idParts[1],
-    org: idParts[0],
-    parent: parent,
-    source: source,
-    target: target,
-    type: this.type,
-    documentation: this.documentation,
-    custom: this.custom,
-    createdOn: this.createdOn,
-    createdBy: createdBy,
-    updatedOn: this.updatedOn,
-    lastModifiedBy: lastModifiedBy,
-    archived: (this.archived) ? true : undefined,
-    archivedOn: (this.archivedOn) ? this.archivedOn : undefined,
-    archivedBy: archivedBy
-  };
-
-
-  if (this.contains) {
-    // Handle the virtual contains field
-    data.contains = (this.contains.every(e => typeof e === 'object'))
-      ? this.contains.map(e => utils.parseID(e._id).pop())
-      : this.contains.map(e => utils.parseID(e).pop());
-  }
-
-  return data;
-};
-
-/**
- * @description Validates an object to ensure that it only contains keys
- * which exist in the element model.
- *
- * @param {Object} object to check keys of.
- * @return {boolean} The boolean indicating if the object contained only
- * existing fields.
- */
-ElementSchema.statics.validateObjectKeys = function(object) {
-  // Initialize returnBool to true
-  let returnBool = true;
-  // Check if the object is NOT an instance of the element model
-  if (!(object instanceof mongoose.model('Element', ElementSchema))) {
-    let validKeys = Object.keys(ElementSchema.paths);
-    validKeys = validKeys.filter((elem, pos) => validKeys.indexOf(elem) === pos);
-    validKeys.push('id');
-    // Loop through each key of the object
-    Object.keys(object).forEach(key => {
-      // Check if the object key is a key in the element model
-      if (!validKeys.includes(key)) {
-        // Key is not in element model, return false
-        returnBool = false;
-      }
-    });
-  }
-  // All object keys found in element model or object was an instance of
-  // element model, return true
-  return returnBool;
-};
+ElementSchema.static('getValidRootElements', function() {
+  return ['model', '__mbee__', 'holding_bin', 'undefined'];
+});
 
 /* ---------------------------( Element Indexes )---------------------------- */
 
 /**
- * @description Adds a compound index on the name and documentation fields.
+ * @description Adds a compound text index on the name, documentation, _id,
+ * source, target and parent fields.
  * @memberOf ElementSchema
  */
-ElementSchema.index({ name: 'text', documentation: 'text' });
-
-
-/* -----------------------( Organization Properties )------------------------ */
-
-// Required for virtual getters
-ElementSchema.set('toJSON', { virtuals: true });
-ElementSchema.set('toObject', { virtuals: true });
+ElementSchema.index({
+  name: 'text',
+  documentation: 'text'
+});
 
 
 /* ------------------------( Element Schema Export )------------------------- */
-
-module.exports = mongoose.model('Element', ElementSchema);
+module.exports = new db.Model('Element', ElementSchema, 'elements');

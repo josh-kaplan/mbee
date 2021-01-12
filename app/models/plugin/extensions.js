@@ -1,11 +1,16 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module models.plugin.extensions
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
+ *
+ * @owner Phillip Lee
+ *
+ * @author Phillip Lee
+ * @author Austin Bieber
  *
  * @description Middleware plugin that extends models.
  * Allows field extensions: archivedBy, createBy, lastModifiedBy, createdOn,
@@ -15,52 +20,41 @@
 module.exports = function extensionPlugin(schema) {
   schema.add({
     archivedBy: {
-      type: String,
+      type: 'String',
       ref: 'User',
       default: null
     },
     createdBy: {
-      type: String,
+      type: 'String',
       ref: 'User',
-      default: null
+      default: null,
+      immutable: true
     },
     lastModifiedBy: {
-      type: String,
+      type: 'String',
       ref: 'User',
       default: null
     },
     createdOn: {
-      type: Date,
-      default: Date.now()
+      type: 'Date',
+      default: Date.now,
+      immutable: true
     },
     archivedOn: {
-      type: Date,
+      type: 'Date',
       default: null
     },
     updatedOn: {
-      type: Date,
+      type: 'Date',
       default: null
     },
     archived: {
-      type: Boolean,
-      default: false,
-      set: function(v) {
-        if (v) {
-          this.archivedOn = Date.now();
-        }
-        return v;
-      }
+      type: 'Boolean',
+      default: false
+    },
+    custom: {
+      type: 'Object',
+      default: {}
     }
-  });
-
-  schema.pre('save', function(next) {
-    // createdOn cannot be changed
-    if (this.isModified('createdOn')) {
-      next(new M.CustomError('createdOn is protected and cannot be changed.', 400, 'warn'));
-    }
-    // Update time
-    this.updatedOn = Date.now();
-
-    return next();
   });
 };

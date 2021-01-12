@@ -1,5 +1,5 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module lib.sanitization
  *
@@ -7,63 +7,57 @@
  *
  * @license MIT
  *
+ * @owner Phillip Lee
+ *
+ * @author Austin Bieber
+ * @author Phillip Lee
+ *
  * @description Defines sanitization functions.
  */
+/* eslint-disable jsdoc/require-description-complete-sentence */
+// Disabled to allow table in description
+
+// MBEE modules
+const db = M.require('db');
 
 /**
  * @description Sanitizes database queries and scripting tags.
  *
  * @param {string} userInput - User input to sanitize.
  *
- * @return {string} Sanitized string
+ * @returns {string} Sanitized string.
  */
 module.exports.sanitize = function(userInput) {
-  return module.exports.mongo(module.exports.html(userInput));
+  return module.exports.db(module.exports.html(userInput));
 };
 
 /**
- * @description Sanitizes database queries.
- *
- * +-------+-----------------+
- * | Input | Sanitized Output|
- * +-------+-----------------+
- * |   $   |                 |
- * +-------+-----------------+
- *
- * @param {Object} userInput - User object data to be sanitized.
+ * @description Sanitizes database queries. Uses the sanitize function defined
+ * in the database strategy, which is defined in the running config.
  */
-module.exports.mongo = function(userInput) {
-  if (userInput instanceof Object) {
-    // Check for '$' in each parameter of userInput
-    Object.keys(userInput).forEach((value) => {
-      // If '$' in value, remove value from userInput
-      if (/^\$/.test(value)) {
-        delete userInput[value];
-      }
-    });
-  }
-  // Return modified userInput
-  return userInput;
-};
+module.exports.db = db.sanitize;
 
 /**
  * @description Sanitizes HTML input.
  *
- * +-------+-----------------+
- * | Input | Sanitized Output|
- * +-------+-----------------+
- * |   &   | &amp            |
- * |   <   | &lt             |
- * |   >   | &gt             |
- * |   "   | &quot           |
- * |   '   | &#039           |
- * +-------+-----------------+
+ * <p> +-------+-----------------+
+ * <br>| Input | Sanitized Output|
+ * <br>+-------+-----------------+
+ * <br>|   &   | &amp            |
+ * <br>|   <   | &lt             |
+ * <br>|   >   | &gt             |
+ * <br>|   "   | &quot           |
+ * <br>|   '   | &#039           |
+ * <br>+-------+-----------------+ </p>
  *
  * @param {*} userInput - User input data to be sanitized.
+ *
+ * @returns {string} Sanitized user input.
  */
 module.exports.html = function(userInput) {
-  // Replace known HTML characters with HTML escape sequences.
+  // Check if input is string type
   if (typeof userInput === 'string') {
+    // Replace known HTML characters with HTML escape sequences
     return String(userInput)
     .replace(/&(?!(amp;)|(lt;)|(gt;)|(quot;)|(#039;)|(nbsp))/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -71,32 +65,40 @@ module.exports.html = function(userInput) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
   }
-
-  // Check if object type
-  if (userInput instanceof Object) {
-    // Loop through each object
-    Object.keys(userInput).forEach((value) => {
-      // Sanitize value
-      userInput[value] = module.exports.html(userInput[value]);
-    });
+  // Check if input type is array
+  else if (Array.isArray(userInput)) {
+    return userInput.map((value) => this.html(value));
   }
+  // Check if input is object type
+  else if (userInput instanceof Object) {
+    const objResult = {};
+    // Loop through the object
+    Object.keys(userInput).forEach((index) => {
+      // Sanitize value
+      objResult[index] = this.html(userInput[index]);
+    });
+    return objResult;
+  }
+
   return userInput;
 };
 
 /**
  * @description Sanitizes LDAP special characters.
  *
- * +-------+-----------------+
- * | Input | Sanitized Output|
- * +-------+-----------------+
- * |   \   | \2A             |
- * |   *   | \28             |
- * |   (   | \29             |
- * |   )   | \5C             |
- * |   NUL | \00             |
- * +-------+-----------------+
+ * <p> +-------+-----------------+
+ * <br>| Input | Sanitized Output|
+ * <br>+-------+-----------------+
+ * <br>|   \   | \2A             |
+ * <br>|   *   | \28             |
+ * <br>|   (   | \29             |
+ * <br>|   )   | \5C             |
+ * <br>|   NUL | \00             |
+ * <br>+-------+-----------------+ </p>
  *
  * @param {*} userInput - User input data to be sanitized.
+ *
+ * @returns {string} Sanitized user input.
  */
 module.exports.ldapFilter = function(userInput) {
   // If string, replace special characters

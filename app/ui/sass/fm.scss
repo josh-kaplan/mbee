@@ -1,20 +1,27 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
- * @module app.ui.sass.fm
+ * @module ui.sass.fm
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
  *
+ * @owner James Eckstein
+ *
+ * @author Josh Kaplan
+ * @author Jake Ursetta
+ *
  * @description This defines the Sass variables.
  */
 
-@import 'variables';
+// MBEE modules
+@import './utils/_variables';
 
 #fm {
 
     color: $mbee-color;
+    padding-bottom: 10px;
 
     h1.title {
         color: $mbee-color;
@@ -32,6 +39,7 @@
 
     .nav-link {
         border-radius: 0px;
+        color:  $mbee-color;
     }
 
     .nav-pills .nav-link.active {

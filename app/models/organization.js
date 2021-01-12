@@ -1,5 +1,7 @@
+/* eslint-disable jsdoc/require-description-complete-sentence */
+// Disabled to allow html in description
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module models.organization
  *
@@ -7,13 +9,42 @@
  *
  * @license MIT
  *
- * @description Defines the organization data model.
+ * @owner Phillip Lee
+ *
+ * @author Jake Ursetta
+ * @author Austin Bieber
+ *
+ * @description
+ * <p>This module defines the organization data model. Organizations are the
+ * highest level of hierarchy in MBEE. Organizations contain multiple projects,
+ * have their own set of permissions, and have the ability to store custom
+ * meta-data.</p>
+ *
+ * <h4>Permissions</h4>
+ * <p>Permissions are stored in a single object, where keys are user's usernames
+ * and values are arrays containing the permissions a specific user has.
+ * Permissions in MBEE are cascading, meaning if a user has write permissions
+ * then they also have read.</p>
+ *
+ * <ul>
+ *   <li><b>read</b>: The user can retrieve the organization and see its data.</li>
+ *   <li><b>write</b>: The user can retrieve the organization and create
+ *   projects. When a user creates a project, they become an admin on that
+ *   project.</li>
+ *   <li><b>admin</b>: The user can retrieve the organization, create projects,
+ *   modify the organization and update/remove user permissions.</li>
+ * </ul>
+ *
+ * <h4>Custom Data</h4>
+ * <p>Custom data is designed to store any arbitrary JSON meta-data. Custom data
+ * is stored in an object, and can contain any valid JSON the user desires.
+ * Only organization admins can update the custom data. The field "custom" is
+ * common to all models, and is added through the extensions plugin.</p>
+ *
  */
 
-// NPM modules
-const mongoose = require('mongoose');
-
 // MBEE modules
+const db = M.require('db');
 const validators = M.require('lib.validators');
 const extensions = M.require('models.plugin.extensions');
 
@@ -26,31 +57,46 @@ const extensions = M.require('models.plugin.extensions');
  *
  * @property {string} _id - The organization's unique ID.
  * @property {string} name - The organization's name.
- * @property {Object} permissions - An object whose keys identify an
+ * @property {object} permissions - An object whose keys identify an
  * organization's roles. The keys are usernames and the values are arrays
  * containing the users permissions.
- * @property {Object} custom - JSON used to store additional data.
+ * @property {object} custom - JSON used to store additional data.
  *
  */
-const OrganizationSchema = new mongoose.Schema({
+const OrganizationSchema = new db.Schema({
   _id: {
-    type: String,
+    type: 'String',
     required: true,
-    match: RegExp(validators.org.id),
-    maxlength: [36, 'Too many characters in ID'],
-    minlength: [2, 'Too few characters in ID']
+    validate: [{
+      validator: validators.org._id.reserved,
+      message: props => 'Organization ID cannot include the following words: '
+        + `[${validators.reserved}].`
+    }, {
+      validator: validators.org._id.match,
+      message: props => `Invalid org ID [${props.value}].`
+    }, {
+      validator: validators.org._id.maxLength,
+      message: props => `Org ID length [${props.value.length}] must not be more`
+        + ` than ${validators.org.idLength} characters.`
+    }, {
+      validator: validators.org._id.minLength,
+      message: props => `Org ID length [${props.value.length}] must not be less`
+        + ' than 2 characters.'
+    }]
   },
   name: {
-    type: String,
+    type: 'String',
+    index: true,
     required: true
   },
   permissions: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
-  custom: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
+    type: 'Object',
+    default: {},
+    validate: [{
+      validator: validators.org.permissions,
+      message: props => 'The organization permissions object is not properly '
+        + 'formatted.'
+    }]
   }
 });
 
@@ -67,150 +113,31 @@ OrganizationSchema.plugin(extensions);
 
 /* -------------------------( Organization Methods )------------------------- */
 /**
- * @description Returns an organization's public data.
- * @memberOf OrganizationSchema
- */
-OrganizationSchema.methods.getPublicData = function() {
-  const permissions = {};
-  let createdBy;
-  let lastModifiedBy;
-  let archivedBy;
-
-  // Loop through each permission key/value pair
-  Object.keys(this.permissions).forEach((u) => {
-    // Return highest permission
-    permissions[u] = this.permissions[u].pop();
-  });
-
-  // If this.createdBy is defined
-  if (this.createdBy) {
-    // If this.createdBy is populated
-    if (typeof this.createdBy === 'object') {
-      // Get the public data of createdBy
-      createdBy = this.createdBy.getPublicData();
-    }
-    else {
-      createdBy = this.createdBy;
-    }
-  }
-
-  // If this.lastModifiedBy is defined
-  if (this.lastModifiedBy) {
-    // If this.lastModifiedBy is populated
-    if (typeof this.lastModifiedBy === 'object') {
-      // Get the public data of lastModifiedBy
-      lastModifiedBy = this.lastModifiedBy.getPublicData();
-    }
-    else {
-      lastModifiedBy = this.lastModifiedBy;
-    }
-  }
-
-  // If this.archivedBy is defined
-  if (this.archivedBy) {
-    // If this.archivedBy is populated
-    if (typeof this.archivedBy === 'object') {
-      // Get the public data of archivedBy
-      archivedBy = this.archivedBy.getPublicData();
-    }
-    else {
-      archivedBy = this.archivedBy;
-    }
-  }
-
-  // Return the organization public fields
-  return {
-    id: this._id,
-    name: this.name,
-    permissions: permissions,
-    custom: this.custom,
-    createdOn: this.createdOn,
-    createdBy: createdBy,
-    updatedOn: this.updatedOn,
-    lastModifiedBy: lastModifiedBy,
-    archived: (this.archived) ? true : undefined,
-    archivedOn: (this.archivedOn) ? this.archivedOn : undefined,
-    archivedBy: archivedBy,
-    projects: (this.projects) ? this.projects.map(p => p.getPublicData()) : undefined
-  };
-};
-
-/**
  * @description Returns supported permission levels
  * @memberOf OrganizationSchema
  */
-OrganizationSchema.methods.getPermissionLevels = function() {
+OrganizationSchema.static('getPermissionLevels', function() {
   return ['remove_all', 'read', 'write', 'admin'];
-};
-OrganizationSchema.statics.getPermissionLevels = function() {
-  return OrganizationSchema.methods.getPermissionLevels();
-};
+});
 
 /**
  * @description Returns organization fields that can be changed
  * @memberOf OrganizationSchema
  */
-OrganizationSchema.methods.getValidUpdateFields = function() {
+OrganizationSchema.static('getValidUpdateFields', function() {
   return ['name', 'custom', 'archived', 'permissions'];
-};
-OrganizationSchema.statics.getValidUpdateFields = function() {
-  return OrganizationSchema.methods.getValidUpdateFields();
-};
+});
 
 /**
  * @description Returns a list of fields a requesting user can populate
  * @memberOf OrganizationSchema
  */
-OrganizationSchema.methods.getValidPopulateFields = function() {
+OrganizationSchema.static('getValidPopulateFields', function() {
   return ['archivedBy', 'lastModifiedBy', 'createdBy', 'projects'];
-};
-
-OrganizationSchema.statics.getValidPopulateFields = function() {
-  return OrganizationSchema.methods.getValidPopulateFields();
-};
-
-
-/**
- * @description Validates an object to ensure that it only contains keys
- * which exist in the organization model.
- *
- * @param {Object} object - The object to check keys of.
- *
- * @return {boolean} The boolean indicating if the object contained only
- * existing fields.
- */
-OrganizationSchema.statics.validateObjectKeys = function(object) {
-  // Initialize returnBool to true
-  let returnBool = true;
-  // Set list array of valid keys
-  const validKeys = Object.keys(OrganizationSchema.paths);
-  // Add 'id' to list of valid keys, for 0.6.0 support
-  validKeys.push('id');
-  // Check if the object is NOT an instance of the organization model
-  if (!(object instanceof mongoose.model('Organization', OrganizationSchema))) {
-    // Loop through each key of the object
-    Object.keys(object).forEach(key => {
-      // Check if the object key is a key in the organization model
-      if (!validKeys.includes(key)) {
-        // Key is not in organization model, return false
-        returnBool = false;
-      }
-    });
-  }
-  // All object keys found in organization model or object was an instance of
-  // organization model, return true
-  return returnBool;
-};
-
-
-/* -----------------------( Organization Properties )------------------------ */
-
-// Required for virtual getters
-OrganizationSchema.set('toJSON', { virtuals: true });
-OrganizationSchema.set('toObject', { virtuals: true });
+});
 
 
 /* ----------------------( Organization Schema Export )---------------------- */
 
-// Export mongoose model as "Organization"
-module.exports = mongoose.model('Organization', OrganizationSchema);
+// Export model as "Organization"
+module.exports = new db.Model('Organization', OrganizationSchema, 'organizations');

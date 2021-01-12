@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module scripts.start
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
+ *
+ * @owner Connor Doyle
+ *
+ * @author Josh Kaplan
  *
  * @description Initializes and starts the http/https servers and listens
  * for incoming requests.
@@ -22,13 +26,14 @@ if (module.parent == null || typeof M === 'undefined') {
 }
 
 // Node modules
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
-const https = require('https');
 
 // NPM Modules
 const express = require('express');
+const spdy = require('spdy');
 
 // MBEE modules
 const app = M.require('app');
@@ -36,7 +41,9 @@ const startup = M.require('lib.startup');
 
 
 /**
- * @description Starts the MBEE server using the configuration file
+ * @description Starts the MBEE server using the configuration file.
+ *
+ * @param {string} args - Additional arguments to pass in when starting the MBEE server.
  */
 function start(args) {
   M.log.debug(`${`+ mbee.js executed as ${process.argv.join(' ')} `
@@ -44,25 +51,51 @@ function start(args) {
 
   startup(); // Print startup banner
 
-  // Initialize httpServer and httpsServer objects
+  // Create command to check if dependencies are up-to-date
+  let cmd = 'yarn check --verify-tree';
+  if (process.env.NODE_ENV === 'production') {
+    cmd += ' --production';
+  }
+
+  try {
+    // Run the command
+    execSync(cmd);
+  }
+  catch (error) {
+    // If failed, warn user and exit
+    M.log.warn('Dependencies out of date! Please run \'yarn install\' or \'npm'
+      + ' install\' to update the dependencies.');
+    process.exit(1);
+  }
+
+
+  // Initialize httpServer and http2Server objects
   let httpServer = null;
-  let httpsServer = null;
+  let http2Server = null;
 
   // Create HTTP Server
-  // Note: The server is not being run until both the http and https objects
+  // Note: The server is not being run until both the http and http/2 objects
   // have been successfully created
   if (M.config.server.http.enabled) {
     // If set to redirect to HTTPS
     // create an app that redirects all routes to HTTPS
     if (M.config.server.http.redirectToHTTPS) {
-      const redirectApp = express();
-      redirectApp.use('*', (req, res) => {
-        const host = req.hostname;
-        const port = M.config.server.https.port;
-        const originalRoute = req.originalUrl;
-        res.redirect(`https://${host}:${port}${originalRoute}`);
-      });
-      httpServer = http.createServer(redirectApp);
+      if (M.config.server.https.enabled) {
+        const redirectApp = express();
+        redirectApp.use('*', (req, res) => {
+          const host = req.hostname;
+          const port = M.config.server.https.port;
+          const originalRoute = req.originalUrl;
+          res.redirect(`https://${host}:${port}${originalRoute}`);
+        });
+        httpServer = http.createServer(redirectApp);
+      }
+      else {
+        // Warn the user that says HTTPS redirect is enabled but HTTPS is disabled.
+        M.log.warn('HTTPS redirect is enabled but HTTPS is disabled.'
+          + '  Continuing with HTTP instead.');
+        httpServer = http.createServer(app);
+      }
     }
     // Otherwise, use the imported app for HTTP
     else {
@@ -75,22 +108,23 @@ function start(args) {
     }
   }
 
-  // Create HTTPS Server
-  // Note: The server is not being run until both the http and https objects
+  // Create HTTP/2 Server
+  // Note: The server is not being run until both the http and http/2 objects
   // have been successfully created
   if (M.config.server.https.enabled) {
-    // Set https credentials
+    // Set http/2 options
     const privateKey = fs.readFileSync(path.join(M.root, M.config.server.https.sslKey), 'utf8');
     const certificate = fs.readFileSync(path.join(M.root, M.config.server.https.sslCert), 'utf8');
-    const credentials = {
+    const options = {
       key: privateKey,
-      cert: certificate
+      cert: certificate,
+      protocol: ['h2']
     };
-    httpsServer = https.createServer(credentials, app);
+    http2Server = spdy.createServer(options, app);
 
     // If a timeout is defined in the config, set it
     if (M.config.server.requestTimeout) {
-      httpsServer.setTimeout(M.config.server.requestTimeout);
+      http2Server.setTimeout(M.config.server.requestTimeout);
     }
   }
 
@@ -102,9 +136,9 @@ function start(args) {
     });
   }
 
-  // Run HTTPS Server
+  // Run HTTP/2 Server
   if (M.config.server.https.enabled) {
-    httpsServer.listen(M.config.server.https.port, () => {
+    http2Server.listen(M.config.server.https.port, () => {
       const port = M.config.server.https.port;
       M.log.info(`MBEE server listening on port ${port}!`);
     });

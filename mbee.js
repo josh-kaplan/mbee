@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module mbee.js
  *
@@ -8,13 +8,20 @@
  *
  * @license MIT
  *
+ * @owner Connor Doyle
+ *
+ * @author Josh Kaplan
+ * @author Austin Bieber
+ * @author Connor Doyle
+ *
  * @description This file defines the MBEE CLI commands and sets up the
  * global M object.
  */
 
-// Node Modules
-const fs = require('fs');     // Access the filesystem
-const path = require('path'); // Find directory paths
+// Node modules
+const fs = require('fs');                       // Access the filesystem
+const path = require('path');                   // Find directory paths
+const { execSync } = require('child_process');  // Execute shell commands
 
 // Project Metadata
 const pkg = require(path.join(__dirname, 'package.json'));
@@ -23,13 +30,24 @@ const pkg = require(path.join(__dirname, 'package.json'));
 // The global MBEE helper object
 global.M = {};
 
+// Get the environment. By default, the environment is 'default'
+let env = 'default';
+// If a environment is set, use that
+if (process.env.MBEE_ENV) {
+  env = process.env.MBEE_ENV;
+}
+// If a dev config exists, use it over the default
+else if (fs.existsSync(path.join(__dirname, 'config', 'dev.cfg'))) {
+  env = 'dev';
+}
+
 /**
  * Defines the environment based on the MBEE_ENV environment variable.
- * If the MBEE_ENV environment variable is not set, the default environment
- * is set to 'default'.
+ * If the MBEE_ENV environment variable is not set, and a dev config does not
+ * exist, the default environment is set to 'default'.
  */
 Object.defineProperty(M, 'env', {
-  value: process.env.MBEE_ENV || 'default',
+  value: env,
   writable: false,
   enumerable: true
 });
@@ -54,11 +72,18 @@ Object.defineProperty(M, 'build', {
 });
 
 /**
- * Defines the schema version by pulling the schemaVersion field from
- * the package.json.
+ * Defines the last commit hash by calling the git command `git rev-parse HEAD`.
+ * If the commit cannot be retrieved it is set to an empty string.
  */
-Object.defineProperty(M, 'schemaVersion', {
-  value: pkg.schemaVersion,
+let commit = '';
+try {
+  commit = execSync('git rev-parse HEAD').toString();
+}
+catch (err) {
+  // Do nothing
+}
+Object.defineProperty(M, 'commit', {
+  value: commit,
   writable: false,
   enumerable: true
 });
@@ -96,26 +121,20 @@ Object.defineProperty(M, 'root', {
 });
 
 // Load the parseJSON library module.
-const parseJSON = M.require('lib.parse-json');
+const configUtils = M.require('lib.config-utils');
 // Set configuration file path
 const configPath = path.join(M.root, 'config', `${M.env}.cfg`);
 // Read configuration file
 const configContent = fs.readFileSync(configPath).toString();
 // Remove comments from configuration string
-const stripComments = parseJSON.removeComments(configContent);
+const stripComments = configUtils.removeComments(configContent);
 // Parse configuration string into JSON object
 const config = JSON.parse(stripComments);
-
-// Check if config secret is RANDOM
-if (config.server.secret === 'RANDOM') {
-  // Config state is RANDOM, generate and set config secret
-  const random1 = Math.random().toString(36).substring(2, 15);
-  const random2 = Math.random().toString(36).substring(2, 15);
-  config.server.secret = random1 + random2;
-}
+// Parse custom validator regex
+configUtils.parseRegEx(config);
 
 /**
- * Define the MBEE configuration
+ * Define the MBEE configuration.
  */
 Object.defineProperty(M, 'config', {
   value: config,
@@ -130,16 +149,79 @@ const buildComplete = fs.existsSync(`${M.root}/build`);
 // Check if dependencies are installed
 if (installComplete) {
   // Initialize the MBEE logger/helper functions
+  const opts = process.argv[3] ? process.argv.slice(3) : [];
+  const logger = M.require('lib.logger');
   Object.defineProperty(M, 'log', {
-    value: M.require('lib.logger'),
+    value: logger.makeLogger(process.argv[2], opts),
     writable: false,
     enumerable: true
   });
 
-  // Initialize the CustomError Class
-  Object.defineProperty(M, 'CustomError', {
-    value: M.require('lib.errors').CustomError
+  // Initialize the custom error classes
+  Object.defineProperties(M, {
+    DataFormatError: {
+      value: M.require('lib.errors').DataFormatError
+    },
+    OperationError: {
+      value: M.require('lib.errors').OperationError
+    },
+    AuthorizationError: {
+      value: M.require('lib.errors').AuthorizationError
+    },
+    PermissionError: {
+      value: M.require('lib.errors').PermissionError
+    },
+    NotFoundError: {
+      value: M.require('lib.errors').NotFoundError
+    },
+    ServerError: {
+      value: M.require('lib.errors').ServerError
+    },
+    DatabaseError: {
+      value: M.require('lib.errors').DatabaseError
+    },
+    NotImplementedError: {
+      value: M.require('lib.errors').NotImplementedError
+    }
   });
+}
+
+let memoryLimit = 512;
+// Loop through the node flags
+process.execArgv.forEach((arg) => {
+  // If the memory limit was changed, set the new limit
+  if (arg.startsWith('--max-old-space-size=')) {
+    memoryLimit = Number(arg.split('--max-old-space-size=')[1]);
+  }
+});
+
+/**
+ * Defines the memory limit which the node process is running with. The default
+ * limit is 512 MB, although it can be changed by passing in the flag
+ * --max-old-space-size={new limit in MB} when starting the process.
+ */
+Object.defineProperty(M, 'memoryLimit', {
+  value: memoryLimit,
+  writable: false,
+  enumerable: true
+});
+
+
+// Validate the config file
+try {
+  configUtils.validate(config);
+}
+catch (error) {
+  M.log.critical(error.message);
+  process.exit(-1);
+}
+
+// Check if config secret is RANDOM
+if (config.server.secret === 'RANDOM') {
+  // Config state is RANDOM, generate and set config secret
+  const random1 = Math.random().toString(36).substring(2, 15);
+  const random2 = Math.random().toString(36).substring(2, 15);
+  config.server.secret = random1 + random2;
 }
 
 // Make the M object read only and its properties cannot be changed or removed.
@@ -148,6 +230,10 @@ Object.freeze(M);
 // Invoke main
 main();
 
+/**
+ * @description The main function that takes in arguments and either starts the MBEE server
+ * or runs one of the custom MBEE scripts.
+ */
 function main() {
   // Set argument commands for use in configuration lib and main function
   // Example: node mbee.js <subcommand> <opts>
@@ -179,3 +265,20 @@ function main() {
     console.log('Unknown command'); // eslint-disable-line no-console
   }
 }
+
+// Define process.exit() listener
+process.on('exit', (code) => {
+  // If process run was "start", log termination
+  if (process.argv[2] === 'start') {
+    // Log the termination of process along with exit code
+    M.log.info(`Exiting with code: ${code}`);
+  }
+});
+
+// Define SIGINT listener, fired when using ctrl + c
+process.on('SIGINT', () => {
+  M.log.verbose('Exiting from SIGINT');
+  // Exit with code 0, as this was user specified exit and nothing is wrong
+  // and catching this signal stops termination
+  process.exit(0);
+});

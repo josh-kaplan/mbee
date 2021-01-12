@@ -1,4 +1,8 @@
-db/
+config/dev*.json*
+config/dev*.cfg*
+config/Dockerfile
+config/production.Dockerfile
+./db
 docs/
 logs/*.log
 node_modules/
@@ -12,3 +16,5 @@ package-lock.json
 .idea/
 build/
 data/
+storage/
+certs/

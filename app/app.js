@@ -1,11 +1,16 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module app
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
+ *
+ * @owner Phillip Lee
+ *
+ * @author Josh Kaplan
+ * @author Austin Bieber
  *
  * @description Defines the MBEE App. Allows MBEE app to be imported by other modules.
  * This app is imported by start.js script which then runs the server.
@@ -19,17 +24,22 @@ const express = require('express');
 const expressLayouts = require('express-ejs-layouts');
 const session = require('express-session');
 const bodyParser = require('body-parser');
-const mongoose = require('mongoose');
-const MongoStore = require('connect-mongo')(session);
 const flash = require('express-flash');
+const compression = require('compression');
 
 // MBEE modules
-const db = M.require('lib.db');
+const db = M.require('db');
 const utils = M.require('lib.utils');
 const middleware = M.require('lib.middleware');
 const migrate = M.require('lib.migrate');
+const Artifact = M.require('models.artifact');
+const Branch = M.require('models.branch');
+const Element = M.require('models.element');
 const Organization = M.require('models.organization');
+const Project = M.require('models.project');
+const ServerData = M.require('models.server-data');
 const User = M.require('models.user');
+const Webhook = M.require('models.webhook');
 
 // Initialize express app and export the object
 const app = express();
@@ -40,7 +50,8 @@ module.exports = app;
  * default organization if needed.
  */
 db.connect()
-.then(() => getSchemaVersion())
+.then(() => initModels())
+.then(() => migrate.getVersion())
 .then(() => createDefaultOrganization())
 .then(() => createDefaultAdmin())
 .then(() => initApp())
@@ -50,24 +61,33 @@ db.connect()
 });
 
 /**
- * @description Initializes the application and exports app.js
+ * @description Initializes the application and exports app.js.
+ *
+ * @returns {Promise} Resolves an empty promise upon completion.
  */
 function initApp() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
+    // Compress responses
+    app.use(compression());
+
     // Configure the static/public directory
     const staticDir = path.join(__dirname, '..', 'build', 'public');
     app.use(express.static(staticDir));
     app.use('/favicon.ico', express.static('build/public/img/favicon.ico'));
 
     // for parsing application/json
-    app.use(bodyParser.json({ limit: '50mb' }));
+    app.use(bodyParser.json({ limit: M.config.server.requestSize || '50mb' }));
     app.use(bodyParser.text());
 
     // for parsing application/xwww-form-urlencoded
-    app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+    app.use(bodyParser.urlencoded({ limit: M.config.server.requestSize || '50mb',
+      extended: true }));
 
     // Trust proxy for IP logging
     app.enable('trust proxy');
+
+    // Remove powered-by from headers
+    app.disable('x-powered-by');
 
     // Configures ejs views/templates
     app.set('view engine', 'ejs');
@@ -82,7 +102,7 @@ function initApp() {
       resave: false,
       saveUninitialized: false,
       cookie: { maxAge: M.config.auth.session.expires * units },
-      store: new MongoStore({ mongooseConnection: mongoose.connection })
+      store: new db.Store()
     }));
 
     // Enable flash messages
@@ -99,7 +119,7 @@ function initApp() {
     // Load the plugin routes
     if (M.config.server.plugins.enabled) {
       M.log.verbose('Initializing plugins ...');
-      const PluginRoutesPath = path.join(__dirname, '..', 'plugins', 'routes.js');
+      const PluginRoutesPath = path.join(M.root, 'plugins', 'routes.js');
       const PluginRouter = require(PluginRoutesPath).router; // eslint-disable-line global-require
       app.use('/plugins', PluginRouter);
       M.log.verbose('Plugins initialized.');
@@ -113,47 +133,45 @@ function initApp() {
   });
 }
 
-// Create default organization if it does not exist
-function createDefaultOrganization() {
-  return new Promise((resolve, reject) => {
-    // Initialize createdOrg
-    let createdOrg = false;
-    // Initialize userIDs
-    let userIDs = null;
-
+/**
+ * @description Creates a default organization if one does not already exist.
+ * @async
+ *
+ * @returns {Promise} Resolves an empty promise upon completion.
+ */
+async function createDefaultOrganization() {
+  try {
     // Find all users
-    User.find({})
-    .then(users => {
-      // Set userIDs to the _id of the users array
-      userIDs = users.map(u => u._id);
-      // Find the default organization
-      return Organization.findOne({ _id: M.config.server.defaultOrganizationId });
-    })
-    .then(org => {
-      // Check if org is NOT null
-      if (org !== null) {
-        // Default organization exists, prune user permissions to only include
-        // users currently in the database.
-        Object.keys(org.permissions).forEach((user) => {
-          if (!userIDs.includes(user)) {
-            delete org.permissions.user;
-          }
-        });
+    const users = await User.find({});
+    // Set userIDs to the _id of the users array
+    const userIDs = users.map(u => u._id);
 
-        // Mark the permissions field modified, require for 'mixed' fields
-        org.markModified('permissions');
+    // Find the default organization
+    const defaultOrgQuery = { _id: M.config.server.defaultOrganizationId };
+    const org = await Organization.findOne(defaultOrgQuery);
 
-        // Save the update organization
-        return org.save();
-      }
-      // Set createdOrg to true
-      createdOrg = true;
+    // Check if org is NOT null
+    if (org !== null) {
+      // Default organization exists, prune user permissions to only include
+      // users currently in the database.
+      Object.keys(org.permissions)
+      .forEach((user) => {
+        if (!userIDs.includes(user)) {
+          delete org.permissions.user;
+        }
+      });
+
+      // Save the updated organization
+      await Organization.updateOne(defaultOrgQuery, { permissions: org.permissions });
+    }
+    else {
       // Default organization does NOT exist, create it and add all active users
       // to permissions list
-      const defaultOrg = new Organization({
+      const defaultOrg = {
         _id: M.config.server.defaultOrganizationId,
-        name: M.config.server.defaultOrganizationName
-      });
+        name: M.config.server.defaultOrganizationName,
+        permissions: {}
+      };
 
       // Add each existing user to default org
       userIDs.forEach((user) => {
@@ -161,103 +179,70 @@ function createDefaultOrganization() {
       });
 
       // Save new default organization
-      return defaultOrg.save();
-    })
-    // Resolve on success of saved organization
-    .then(() => {
-      if (createdOrg) {
-        M.log.info('Default Organization Created');
-      }
-      return resolve();
-    })
-    // Catch and reject error
-    .catch(error => reject(error));
-  });
+      await Organization.insertMany(defaultOrg);
+
+      M.log.info('Default Organization Created');
+    }
+  }
+  catch (error) {
+    throw new M.ServerError('Failed to create the default organization.', 'error');
+  }
 }
 
-// Create default admin if a global admin does not exist
-function createDefaultAdmin() {
-  return new Promise((resolve, reject) => {
-    // Initialize userCreated
-    let userCreated = false;
+/**
+ * @description Creates a default admin if a global admin does not already exist.
+ * @async
+ *
+ * @returns {Promise} Returns an empty promise upon completion.
+ */
+async function createDefaultAdmin() {
+  try {
     // Search for a user who is a global admin
-    User.findOne({ admin: true })
-    .then(user => {
-      // Check if the user is NOT null
-      if (user !== null) {
-        // Global admin already exists, resolve
-        return resolve();
-      }
-      // set userCreated to true
-      userCreated = true;
+    const user = await User.findOne({ admin: true });
+
+    // If user is null, create the admin user
+    if (user === null) {
       // No global admin exists, create local user as global admin
-      const adminUserData = new User({
+      const adminUserData = {
         // Set username and password of global admin user from configuration.
         _id: M.config.server.defaultAdminUsername,
         password: M.config.server.defaultAdminPassword,
         provider: 'local',
-        admin: true
-      });
-      // Save new global admin user
-      return adminUserData.save();
-    })
-    .then(() => Organization.findOne({ _id: M.config.server.defaultOrganizationId }))
-    .then((defaultOrg) => {
+        admin: true,
+        changePassword: false
+      };
+
+      User.hashPassword(adminUserData);
+
+      // Save the admin user
+      await User.insertMany(adminUserData);
+
+      // Find the default org
+      const defaultOrgQuery = { _id: M.config.server.defaultOrganizationId };
+      const defaultOrg = await Organization.findOne(defaultOrgQuery);
+
       // Add default admin to default org
       defaultOrg.permissions[M.config.server.defaultAdminUsername] = ['read', 'write'];
 
-      defaultOrg.markModified('permissions');
-
       // Save the updated default org
-      return defaultOrg.save();
-    })
-    // Resolve on success of saved admin
-    .then(() => {
-      if (userCreated) {
-        M.log.info('Default Admin Created');
-      }
-      return resolve();
-    })
-    // Catch and reject error
-    .catch(error => reject(error));
-  });
+      await Organization.updateOne(defaultOrgQuery, { permissions: defaultOrg.permissions });
+
+      M.log.info('Default Admin Created');
+    }
+  }
+  catch (error) {
+    throw new M.ServerError('Failed to create the default admin.', 'error');
+  }
 }
 
 /**
- * @description Gets the schema version from the database. Runs the migrate
- * function if no schema version exists.
+ * @description Initializes all models asynchronously.
+ * @async
+ *
+ * @returns {Promise} Returns an empty promise upon completion.
  */
-function getSchemaVersion() {
-  return new Promise((resolve, reject) => {
-    // Get all collections in the DB
-    mongoose.connection.db.collections()
-    .then((collections) => {
-      // Get all collection names
-      const existingCollections = collections.map(c => c.s.name);
-      // Create the server_data collection if it doesn't exist
-      if (!existingCollections.includes('server_data')) {
-        return mongoose.connection.db.createCollection('server_data');
-      }
-    })
-    // Get all documents from the server data
-    .then(() => mongoose.connection.db.collection('server_data').find({}).toArray())
-    .then((serverData) => {
-      // Restrict collection to one document
-      if (serverData.length > 1) {
-        throw new Error('Cannot have more than one document in the server_data collection.');
-      }
-      // No server data found, automatically upgrade versions
-      if (serverData.length === 0) {
-        M.log.info('No server data found, automatically migrating.');
-        return migrate.migrate([]);
-      }
-      // One document exists, read and compare versions
-      if (serverData.length === 0 || serverData[0].version !== M.schemaVersion) {
-        throw new Error('Please run \'node mbee migrate\' to migrate the '
-          + 'database.');
-      }
-    })
-    .then(() => resolve())
-    .catch((error) => reject(error));
-  });
+async function initModels() {
+  await Promise.all([Artifact.init(), Branch.init(), Element.init(),
+    Organization.init(), Project.init(), ServerData.init(), User.init(),
+    Webhook.init()]);
 }

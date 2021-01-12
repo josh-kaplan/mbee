@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module scripts.build
  *
@@ -8,8 +8,15 @@
  *
  * @license MIT
  *
+ * @owner Connor Doyle
+ *
+ * @author Josh Kaplan
+ * @author Leah De Laurell
+ *
  * @description Creates the necessary static assets used by the MBEE UI.
  */
+/* eslint-disable jsdoc/require-description-complete-sentence */
+// Rule disabled to allow list in description
 
 // Error Check - Check if file was run directly or global M object is undefined
 if (module.parent == null || typeof M === 'undefined') {
@@ -31,12 +38,16 @@ const concat = require('gulp-concat');
 const minify = require('gulp-minify');
 const sass = require('gulp-sass');
 const markdown = require('gulp-markdown');
+const rename = require('gulp-rename');
 const webpack = require('webpack');
+
+// MBEE modules
 const validators = M.require('lib.validators');
+const utils = M.require('lib.utils');
 
 /**
  * @description Builds the MBEE static assets by:
- * - Copying dependencies to their final location,
+ * - Copying dependencies to their final location
  * - Compiling Sass into CSS
  * - Building Javascript libraries into client-side code
  * - Building JSDoc documentation.
@@ -50,6 +61,10 @@ const validators = M.require('lib.validators');
  * --all
  *
  * If NO arguments given, defaults to `--all`
+ *
+ * @param {string} _args - Additional options to pass into the build function.
+ *
+ * @returns {Promise} - Returns an empty promise upon completion.
  */
 function build(_args) {
   M.log.info('Building MBEE ...');
@@ -84,9 +99,9 @@ function build(_args) {
     .pipe(gulp.dest('build/public/js'));
 
     // Copy Jquery UI JS
-    gulp.src(['./node_modules/jquery-ui/ui/effect.js', './node_modules/jquery-ui/ui/effects/*.js'])
-    .pipe(concat('jquery-ui.js'))
-    .pipe(minify({ noSource: true }))
+    gulp.src([
+      './node_modules/jquery-ui-dist/jquery-ui.min.js'
+    ])
     .pipe(gulp.dest('build/public/js'));
 
     // Copy Popper JS
@@ -98,24 +113,13 @@ function build(_args) {
     // Copy Font-Awesome dependencies
     gulp.src('./node_modules/@fortawesome/fontawesome-free/webfonts/**/*')
     .pipe(gulp.dest('build/public/webfonts'));
-  }
 
-  // Initialize validators for UI validation
-  const validator = {
-    org: {
-      id: validators.org.id,
-      name: validators.org.name
-    },
-    project: {
-      id: validators.project.id,
-      name: validators.project.name
-    },
-    user: {
-      fname: validators.user.fname,
-      lname: validators.user.lname,
-      username: validators.user.username
-    }
-  };
+    // Copy MBEE JS
+    gulp.src('./app/ui/js/**/*.js')
+    .pipe(concat('mbee.js'))
+    .pipe(minify({ ext: { min: '.min.js' } }))
+    .pipe(gulp.dest('build/public/js'));
+  }
 
   // Initialize the build directory
   if (!fs.existsSync('build')) {
@@ -129,44 +133,12 @@ function build(_args) {
     fs.mkdirSync(validatorsDir);
   }
 
+  // Append ID Delimiter to validators object
+  const _validators = JSON.parse(JSON.stringify(validators));
+  _validators.ID_DELIMITER = utils.ID_DELIMITER;
+
   // Import validator object into validators file
-  fs.writeFileSync(path.join(validatorsDir, 'validators.json'), JSON.stringify(validator), 'utf8');
-
-  // Transpile React components
-  if (args.includes('--all') || args.includes('--react')) {
-    webpack({
-      mode: 'production',
-      entry: {
-        navbar: path.join(M.root, 'app', 'ui', 'react-components', 'general-components', 'nav.jsx'),
-        'home-page': path.join(M.root, 'app', 'ui', 'react-components', 'home-page', 'home-page.jsx'),
-        organizations: path.join(M.root, 'app', 'ui', 'react-components', 'organizations', 'organizations.jsx'),
-        projects: path.join(M.root, 'app', 'ui', 'react-components', 'projects', 'projects.jsx'),
-        user: path.join(M.root, 'app', 'ui', 'react-components', 'user', 'user.jsx')
-      },
-      output: {
-        path: path.join(M.root, 'build', 'public', 'react-js'),
-        filename: '[name].js'
-      },
-      module: {
-        rules: [
-          {
-            test: /\.jsx?$/,
-            loader: 'babel-loader',
-            exclude: /node_modules/,
-            options: {
-              presets: ['babel-preset-env', 'babel-preset-react']
-            }
-          }
-        ]
-      }
-    }, (err, stats) => {
-      if (err || stats.hasErrors()) {
-        // eslint-disable-next-line no-console
-        console.log(stats.compilation.errors);
-      }
-    });
-  }
-
+  fs.writeFileSync(path.join(validatorsDir, 'validators.json'), JSON.stringify(_validators), 'utf8');
 
   // Compile Sass into CSS
   if (args.includes('--all') || args.includes('--sass')) {
@@ -181,7 +153,7 @@ function build(_args) {
   if (args.includes('--all') || args.includes('--jsdoc')) {
     M.log.info('  + Building jsdoc ...');
     // Create JSDoc build command
-    const jsdoc = `${process.argv[0]} node_modules/jsdoc/jsdoc.js`;
+    const jsdoc = `node ${path.join('node_modules', 'jsdoc', 'jsdoc.js')}`;
     const cmd = `${jsdoc} -c ./config/jsdoc.json`;
 
     // Execute JSDoc build command
@@ -194,9 +166,77 @@ function build(_args) {
     gulp.src('./doc/**/*.md')
     .pipe(markdown())
     .pipe(gulp.dest('build/fm'));
+
+    // Add database configuration README as an appendix
+    gulp.src('./app/db/*.md')
+    .pipe(markdown())
+    .pipe(rename('appendix-C-database-configuration.html'))
+    .pipe(gulp.dest('build/fm'));
   }
 
-  M.log.info('Build Complete.');
+  // Returning a promise to make synchronous
+  return new Promise((resolve, reject) => {
+    // Transpile React components
+    if (args.includes('--all') || args.includes('--react')) {
+      // Set default mode
+      let mode = 'production';
+
+      // Verify if mode provided
+      if (M.config.server.ui.mode) {
+        // Set config mode
+        mode = M.config.server.ui.mode;
+      }
+
+      M.log.info(`  + Transpiling react in ${mode} mode...`);
+      webpack({
+        mode: mode,
+        entry: {
+          navbar: path.join(M.root, 'app', 'ui', 'components', 'apps', 'nav-app.jsx'),
+          'home-app': path.join(M.root, 'app', 'ui', 'components', 'apps', 'home-app.jsx'),
+          'org-app': path.join(M.root, 'app', 'ui', 'components', 'apps', 'org-app.jsx'),
+          'project-app': path.join(M.root, 'app', 'ui', 'components', 'apps', 'project-app.jsx'),
+          'profile-app': path.join(M.root, 'app', 'ui', 'components', 'apps', 'profile-app.jsx'),
+          'admin-console-app': path.join(M.root, 'app', 'ui', 'components', 'apps', 'admin-console-app.jsx')
+        },
+        output: {
+          path: path.join(M.root, 'build', 'public', 'js'),
+          filename: '[name].js'
+        },
+        devServer: {
+          historyApiFallback: true
+        },
+        module: {
+          rules: [
+            {
+              test: /\.jsx?$/,
+              loader: 'babel-loader',
+              exclude: /node_modules/,
+              options: {
+                presets: ['@babel/preset-env', '@babel/preset-react']
+              }
+            }
+          ]
+        }
+      }, (err, stats) => {
+        if (err || stats.hasErrors()) {
+          // eslint-disable-next-line no-console
+          console.log(stats.compilation.errors);
+          return reject();
+        }
+        return resolve();
+      });
+    }
+    else {
+      return resolve();
+    }
+  })
+  .then(() => {
+    M.log.info('Build Complete.');
+  })
+  .catch(() => {
+    M.log.warn('React build FAILED');
+    M.log.info('Build Complete.');
+  });
 }
 
 module.exports = build;

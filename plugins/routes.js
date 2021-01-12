@@ -1,5 +1,5 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module plugins.routes
  *
@@ -7,79 +7,93 @@
  *
  * @license MIT
  *
+ * @owner Connor Doyle
+ *
+ * @author Josh Kaplan
+ *
  * @description This file implements the plugin loading and routing logic.
  */
 
 // Node modules
 const fs = require('fs');
+const fsExtra = require('fs-extra');
 const path = require('path');
 const { execSync } = require('child_process');
 
-// NPM Modules
+// NPM modules
 const express = require('express');
 const pluginRouter = express.Router();
 
 const protectedFileNames = ['routes.js'];
-const mbeeDependencies = require(`${M.root}/package.json`).dependencies;
-const mbeeDepList = Object.keys(mbeeDependencies);
 
 // Load the plugins
 loadPlugins();
 
 /**
- * Actually loads the plugins by copying them from their source location into
+ * @description Actually loads the plugins by copying them from their source location into
  * the plugins directory, then loops over those plugins to "require" them and
  * use them as part of the plugins routes.
  */
 function loadPlugins() {
   const loadedPlugins = [];
+  const plugins = M.config.server.plugins.plugins;
 
   // Clone or copy plugins from their source into the plugins directory
-  for (let i = 0; i < M.config.server.plugins.plugins.length; i++) {
-    const data = M.config.server.plugins.plugins[i];
+  Object.keys(plugins).forEach((k) => {
+    // Get the name of the plugin
+    plugins[k].name = k;
     // Git repos
-    if (data.source.endsWith('.git')) {
-      clonePluginFromGitRepo(data);
+    if (plugins[k].source.endsWith('.git')) {
+      clonePluginFromGitRepo(plugins[k]);
     }
     // Local plugins
-    else if (data.source.startsWith('/') || data.source.startsWith('.')) {
-      copyPluginFromLocalDir(data);
+    else if (plugins[k].source.startsWith('/') || plugins[k].source.startsWith('.')
+      || plugins[k].source.startsWith(`\\`)) { // eslint-disable-line
+      copyPluginFromLocalDir(plugins[k]);
     }
     // Website downloads
-    else if (data.source.endsWith('.zip') || data.source.endsWith('.gz')) {
-      downloadPluginFromWebsite(data);
+    else if (plugins[k].source.endsWith('.zip') || plugins[k].source.endsWith('.gz')) {
+      downloadPluginFromWebsite(plugins[k]);
     }
     else {
       M.log.warn('Plugin type unknown');
     }
-  }
+  });
 
   // List the contents of the plugins directory
   const files = fs.readdirSync(__dirname);
 
   // Get a list of plugin names in the config
-  const pluginName = M.config.server.plugins.plugins.map(plugin => plugin.name);
+  const pluginNames = Object.keys(plugins);
 
-  files.forEach((f) => {
+  // Initialize object to store plugin middleware functions
+  const pluginFunctions = {};
+  const apiFunctions = M.require('controllers.api-controller');
+  Object.keys(apiFunctions).forEach((apiFun) => {
+    pluginFunctions[apiFun] = { pre: [], post: [] };
+  });
+  // Remove reserved functions
+  const reservedFunctions = ['swaggerJSON', 'login', 'test', 'version', 'patchPassword'];
+  reservedFunctions.forEach((reserved) => {
+    delete pluginFunctions[reserved];
+  });
+
+  files.forEach(async (f) => {
     // Skip routes.js
     if (protectedFileNames.includes(f)) {
       return;
     }
 
     // Removes old plugins
-    if (!pluginName.includes(f)) {
+    if (!pluginNames.includes(f)) {
       M.log.info(`Removing plugin '${f}' ...`);
-      const c = `rm -rf ${__dirname}/${f}`;
-      const stdout = execSync(c);
-      M.log.verbose(stdout.toString());
+      fsExtra.removeSync(path.join(__dirname, f));
     }
     // If package.json doesn't exist, it is not a valid plugin. Skip it.
     const pluginPath = path.join(__dirname, f);
     if (!fs.existsSync(path.join(pluginPath, 'package.json'))) {
       M.log.info(`Removing invalid plugin '${f}' ...`);
-      const c = `rm -rf ${__dirname}/${f}`;
-      const stdout = execSync(c);
-      M.log.verbose(stdout.toString());
+      fsExtra.removeSync(path.join(__dirname, f));
       return;
     }
 
@@ -90,27 +104,22 @@ function loadPlugins() {
     M.log.info(`Loading plugin '${namespace}' ...`);
 
     // Install the dependencies
-    const dependencies = pkg.dependencies;
-    if (dependencies) {
+    if (pkg.dependencies) {
       M.log.verbose('Installing plugin dependencies ...');
-      // Loop through plugin dependencies
-      Object.keys(dependencies).forEach(dep => {
-        // Skip conflicting dependencies
-        if (mbeeDepList.includes(dep)) {
-          return;
-        }
-        // Add dependency to node_modules without erasing existing node_modules
-        // directory
-        const commands = [
-          `pushd ${pluginPath}; yarn install; popd;`
-        ];
-        M.log.verbose(`Installing dependency ${dep} ...`);
-        const stdout = execSync(commands.join('; '));
-        M.log.debug(stdout.toString());
-        M.log.verbose(`${dep} installed.`);
-      });
+      const command = `cd ${path.join('plugins', namespace)}; yarn install`;
+      const stdout = execSync(command);
+      M.log.debug(stdout.toString());
+      M.log.verbose('Dependencies installed.');
     }
 
+    // Run the build script if specified
+    if (pkg.scripts && pkg.scripts.build) {
+      M.log.verbose('Running yarn build...');
+      const command = 'yarn build';
+      const stdout = execSync(command);
+      M.log.debug(stdout.toString());
+      M.log.verbose('Build completed.');
+    }
 
     // Try: creates the plug-in path with the plug-in name
     try {
@@ -123,55 +132,96 @@ function loadPlugins() {
       M.log.error(err);
       return;
     }
+
+    // Load the plugin middleware functions
+    if (fs.existsSync(path.join(pluginPath, 'middleware.js'))) {
+      // eslint-disable-next-line global-require
+      const middleware = require(path.join(pluginPath, 'middleware'));
+      M.log.info('Loading plugin middleware...');
+      // Iterate through each middleware object corresponding to an APIController function
+      Object.keys(middleware).forEach((m) => {
+        // Check that each middleware object only has the keys "pre" and/or "post"
+        const keys = Object.keys(middleware[m]);
+        const allowedKeys = ['pre', 'post'];
+        if (keys.every((k) => allowedKeys.includes(k))) {
+          if (Object.keys(pluginFunctions).includes(m)) {
+            if (middleware[m].pre) pluginFunctions[m].pre.push(middleware[m].pre);
+            if (middleware[m].post) pluginFunctions[m].post.push(middleware[m].post);
+          }
+          else {
+            M.log.warn(`Plugin middleware for api function [${m}] not supported`);
+          }
+        }
+        else {
+          M.log.warn(`Skipping plugin middleware for api function [${m}] due to invalid format`);
+        }
+      });
+    }
+
+
+    // Run the plugin tests if specified
+    if (plugins[f].testOnStartup) {
+      M.log.info(`Running tests for plugin ${namespace}`);
+      const opts = ['--no-header', '--plugin', namespace];
+      // eslint-disable-next-line global-require
+      const task = require(path.join(M.root, 'scripts', 'test'));
+      await task(opts);
+      M.log.info(`Tests completed for plugin ${namespace}`);
+    }
+
     M.log.info(`Plugin ${namespace} installed.`);
 
     // Add plugin name/title to array of loaded plugins
     loadedPlugins.push({
       name: namespace,
-      title: M.config.server.plugins.plugins.filter(p => p.name === namespace)[0].title
+      title: plugins[f].title
     });
   });
 
   // Export list of loaded plugins
   module.exports.loadedPlugins = loadedPlugins;
+  module.exports.pluginFunctions = pluginFunctions;
 }
 
 /**
  * @description Clones the plugin from a Git repository and places in the
  * appropriate location in the plugins directory.
  *
- * @param {Object} data The plugin configuration data
+ * @param {object} data - The plugin configuration data.
  */
 function clonePluginFromGitRepo(data) {
   // Remove plugin if it already exists in plugins directory
-  const rmDirCmd = (process.platform === 'win32') ? 'rmdir /s' : 'rm -rf';
-  const stdoutRmCmd = execSync(`${rmDirCmd} ${path.join(M.root, 'plugins', data.name)}`);
-  M.log.verbose(stdoutRmCmd.toString());
+  fsExtra.removeSync(path.join(M.root, 'plugins', data.name));
 
-  // Set deploy key file permissions
-  let deployKeyCmd = '';
-  if (data.hasOwnProperty('deployKey')) {
-    execSync(`chmod 400 ${data.deployKey}`);
-    deployKeyCmd = `GIT_SSH_COMMAND="ssh -i ${data.deployKey} -oStrictHostKeyChecking=no" `;
+  try {
+    // Set deploy key file permissions
+    let deployKeyCmd = '';
+    if (data.hasOwnProperty('deployKey')) {
+      execSync(`chmod 400 ${data.deployKey}`);
+      deployKeyCmd = `GIT_SSH_COMMAND="ssh -i ${data.deployKey} -oStrictHostKeyChecking=no" `;
+    }
+
+    let version = '';
+    // Clone a specific version
+    if (data.hasOwnProperty('version')) {
+      // Disables a warning about detachedHead
+      execSync('git config --global advice.detachedHead false');
+      version = `--branch ${data.version} `;
+    }
+
+    // Create the git clone command
+    const cmd = `${deployKeyCmd}git clone ${version}${data.source} `
+      + `${path.join(M.root, 'plugins', data.name)}`;
+
+    // Clone the repo
+    M.log.info(`Cloning plugin ${data.name} from ${data.source} ...`);
+    const stdout2 = execSync(cmd);
+    M.log.verbose(stdout2.toString());
+    M.log.info('Clone complete.');
   }
-
-  let version = '';
-  // Clone a specific version
-  if (data.hasOwnProperty('version')) {
-    // Disables a warning about detachedHead
-    execSync('git config --global advice.detachedHead false');
-    version = `--branch ${data.version} `;
+  catch (error) {
+    M.log.warn(`Failed to clone plugin [${data.name}].`);
   }
-
-  // Create the git clone command
-  const cmd = `${deployKeyCmd}git clone ${version}${data.source} `
-            + `${path.join(M.root, 'plugins', data.name)}`;
-
-  // Clone the repo
-  M.log.info(`Cloning plugin ${data.name} from ${data.source} ...`);
-  const stdout2 = execSync(cmd);
-  M.log.verbose(stdout2.toString());
-  M.log.info('Clone complete.');
 }
 
 /**
@@ -179,22 +229,20 @@ function clonePluginFromGitRepo(data) {
  * directory. If the plugin location is already in the local directory, nothing
  * occurs.
  *
- * @param {Object} data The plugin configuration data
+ * @param {object} data - The plugin configuration data.
  */
 function copyPluginFromLocalDir(data) {
   // Remove plugin if it already exists in plugins directory
-  const rmDirCmd = (process.platform === 'win32') ? 'rmdir /s' : 'rm -rf';
-  const stdoutRmCmd = execSync(`${rmDirCmd} ${path.join(M.root, 'plugins', data.name)}`);
-  M.log.verbose(stdoutRmCmd.toString());
+  if (fs.existsSync(path.join(M.root, 'plugins', data.name))) {
+    fsExtra.removeSync(path.join(M.root, 'plugins', data.name));
+  }
 
-  // Generate the copy command
-  let cmd = (process.platform === 'win32') ? 'xcopy /E' : 'cp -r ';
-  cmd = `${cmd} ${data.source} ${path.join(M.root, 'plugins', data.name)}`;
+  // Making the directory for the plugin
+  fs.mkdirSync(path.join(M.root, 'plugins', data.name));
 
   // Execute the copy command
-  M.log.info(`Copying plugin ${data.name} from ${data.source} ...`);
-  const stdout = execSync(cmd);
-  M.log.verbose(stdout.toString());
+  M.log.info(`Copying plugin files to ${data.name} from ${data.source} ...`);
+  fsExtra.copySync(data.source, path.join(M.root, 'plugins', data.name));
   M.log.info('Copy complete');
 }
 
@@ -203,20 +251,18 @@ function copyPluginFromLocalDir(data) {
  * directory. If the plugin location is already in the local directory, nothing
  * occurs.
  *
- * @param {Object} data - The plugin configuration data
+ * @param {object} data - The plugin configuration data.
  */
 function downloadPluginFromWebsite(data) {
   // Remove plugin if it already exists in plugins directory
-  const rmDirCmd = (process.platform === 'win32') ? 'rmdir /s' : 'rm -rf';
-  const stdoutRmCmd = execSync(`${rmDirCmd} ${path.join(M.root, 'plugins', data.name)}`);
-  M.log.verbose(stdoutRmCmd.toString());
+  fsExtra.removeSync(path.join(M.root, 'plugins', data.name));
 
   // Proxy information
   const httpProxy = M.config.server.proxy;
 
   // Create directory for plugin
   const dirName = path.join(M.root, 'plugins', data.name);
-  const stdoutMkdirCmd = execSync(`mkdir -p ${dirName}`);
+  const stdoutMkdirCmd = fsExtra.mkdirpSync(dirName);
   M.log.verbose(stdoutMkdirCmd.toString());
 
   // Setting parameters
@@ -226,19 +272,19 @@ function downloadPluginFromWebsite(data) {
   // .zip files
   if (data.source.endsWith('.zip')) {
     // Set name and unzip command
-    fileName = `${path.join(M.root, 'plugins', data.name)}/${data.name}.zip`;
+    fileName = path.join(M.root, 'plugins', data.name, `${data.name}.zip`);
     unzipCmd = `unzip ${fileName} -d ${dirName}`;
   }
   // .tar.gz files
   else if (data.source.endsWith('.tar.gz')) {
     // Set name and unzip command
-    fileName = `${path.join(M.root, 'plugins', data.name)}/${data.name}.tar.gz`;
+    fileName = path.join(M.root, 'plugins', data.name, `${data.name}.tar.gz`);
     unzipCmd = `tar xvzf ${fileName} -C ${dirName}`;
   }
   // .gz files
   else if (data.source.endsWith('.gz')) {
     // Set name and unzip command
-    fileName = `${path.join(M.root, 'plugins', data.name)}/${data.name}.gz`;
+    fileName = path.join(M.root, 'plugins', data.name, `${data.name}.gz`);
     unzipCmd = `gunzip -c ${fileName} > ${dirName}`;
   }
   // Other files

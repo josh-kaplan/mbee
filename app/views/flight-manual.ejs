@@ -1,12 +1,16 @@
 <%
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module views.flight-manual
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
+ *
+ * @owner James Eckstein
+ *
+ * @author Josh Kaplan
  *
  * @description This file defines the view for the MBEE flight manual.
  */
@@ -40,7 +44,6 @@
       </div>
     </div>
     <div class="col-9">
-      <b>WARNING: This manual is out of date and some sections may need to be updated.</b>
       <div class="tab-content" id="v-pills-tabContent">
         <% for (let i = 0; i < sections.length; i++ ) { %>
         <div class="tab-pane fade <%= (i === 0) ? 'show active': '' %>"

@@ -51,6 +51,18 @@
       "custom": {
         "location": "Location03"
       }
+    },
+    {
+      "username": "testuser04",
+      "password": "Password123@",
+      "preferredName": "Preferred",
+      "fname": "First",
+      "lname": "Last",
+      "email": "user4@test.com",
+      "admin": false,
+      "custom": {
+        "location": "Location04"
+      }
     }
   ],
 
@@ -108,7 +120,7 @@
       }
     },
     {
-      "id": "project3",
+      "id": "project03",
       "name": "Project 03",
       "custom": {
         "location": "Location 03"
@@ -178,7 +190,205 @@
       "target": "batchelem5",
       "documentation": "Element #6",
       "custom": {}
+    },
+    {
+      "id": "batchelem7",
+      "name": "Batch Element 7",
+      "parent": "batchelem2",
+      "source": "batchelem8",
+      "target": "batchelem8",
+      "documentation": "Element #7",
+      "custom": {}
+    },
+    {
+      "id": "batchelem8",
+      "name": "Batch Element 8",
+      "parent": "batchelem2",
+      "documentation": "Element #8",
+      "custom": {}
+    },
+    {
+      "id": "batchelem9",
+      "name": "Batch Element 9",
+      "parent": "model",
+      "archived": true
+    },
+    {
+      "id": "batchelem10",
+      "name": "Batch Element 10"
+    },
+    {
+      "id": "batchelem11",
+      "name": "Batch Element 11"
+    },
+    {
+      "id": "batchelem12",
+      "name": "Batch Element 12"
+    },
+    {
+      "id": "batchelem13",
+      "name": "Batch Element 13"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": "artifact00",
+      "description": "artifact 00",
+      "filename": "logo.png",
+      "location": "test/test_files",
+      "size": 26930,
+      "custom": {
+        "custom_key": "custom_value"
+      }
+    },
+    {
+      "id": "artifact01",
+      "description": "artifact 01",
+      "filename": "mbee-concept.png",
+      "location": "test/test_files",
+      "size" : 199283,
+      "custom": {
+        "custom_key": "custom_value"
+      }
+    },
+    {
+      "id": "artifact02",
+      "description": "artifact 02",
+      "filename": "text.txt",
+      "location": "test/test_files",
+      "size" : 13,
+      "custom": {
+        "custom_key": "custom_value"
+      }
+    },
+    {
+      "id": "artifact03",
+      "description": "artifact 03",
+      "filename": "text.txt",
+      "location": "test/test_files",
+      "size" : 13,
+      "custom": {
+        "custom_key": "custom_value"
+      }
+    },{
+      "id": "artifact04",
+      "description": "artifact 04",
+      "filename": "text.txt",
+      "location": "test/test_files",
+      "size" : 13,
+      "custom": {
+        "custom_key": "custom_value"
+      }
+    }
+
+  ],
+  "jmi1": [
+    { "id": "1",
+      "parent": null,
+      "contains": ["3"]
+    },
+    {
+      "id": "2",
+      "parent": null,
+      "contains": ["4"]
+    },
+    { "id": "3",
+      "parent": "1",
+      "contains": []
+    },
+    {
+      "id": "4",
+      "parent": "2",
+      "contains": ["5"]
+    },
+    {
+      "id": "5",
+      "parent": "4",
+      "contains": []
+    }
+  ],
+  "branches": [
+    {
+      "id": "master",
+      "name": "Master Branch",
+      "custom": {},
+      "tag": false,
+      "source": null
+    },
+    {
+      "id": "branch01",
+      "name": "Branch01",
+      "custom": {},
+      "tag": false,
+      "source": "master"
+    },
+    {
+      "id": "branch02",
+      "name": "Branch02",
+      "custom": {
+        "location": "Location02"
+      },
+      "tag": false,
+      "source": "master"
+    },
+    {
+      "id": "branch03",
+      "name": "Branch03",
+      "custom": {},
+      "tag": false,
+      "source": "master"
+    },
+    {
+      "id": "branch04",
+      "name": "Branch04",
+      "custom": {},
+      "tag": false,
+      "source": "master"
+    },
+    {
+      "id": "branch05",
+      "name": "Branch05",
+      "custom": {},
+      "tag": false,
+      "source": "master"
+    },
+    {
+      "id": "branch06",
+      "name": "Branch06",
+      "custom": {},
+      "tag": false,
+      "source": "master"
+    },
+    {
+      "id": "branch07",
+      "name": "Branch07",
+      "custom": {},
+      "tag": true,
+      "source": "master"
+    }
+  ],
+  "webhooks": [
+    {
+      "name": "test_webhook00",
+      "type": "Outgoing",
+      "description": "test webhook description 0",
+      "triggers": ["test-event"],
+      "url": "testurl0"
+    },
+    {
+      "name": "test_webhook01",
+      "type": "Incoming",
+      "description": "test webhook description 1",
+      "triggers": ["test-event"],
+      "token": "test token",
+      "tokenLocation": "body.test.token"
+    },
+    {
+      "name": "test_webhook02",
+      "type": "Outgoing",
+      "description": "test webhook description 2",
+      "triggers": ["test-event"],
+      "url": "testurl2"
     }
   ]
 }
-

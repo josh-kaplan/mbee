@@ -1,5 +1,5 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module test.999-wrap-up
  *
@@ -7,20 +7,23 @@
  *
  * @license MIT
  *
+ * @owner Connor Doyle
+ *
+ * @author Leah De Laurell
+ * @author Josh Kaplan
+ *
  * @description This "test" is used to clear the database after tests.
  * SHOULD NOT run against production databases.
  * Intended use in Continuous Integration/Continuous Delivery(Jenkins)
  * test to ensure the database is empty and improve CI testing.
  */
 
-// Node modules
+// NPM modules
 const chai = require('chai');
 
-// NPM modules
-const mongoose = require('mongoose');
-
 // MBEE modules
-const db = M.require('lib.db');
+const ServerData = M.require('models.server-data');
+const db = M.require('db');
 
 /* --------------------( Main )-------------------- */
 /**
@@ -30,45 +33,42 @@ const db = M.require('lib.db');
  * name of the current file.
  */
 describe(M.getModuleName(module.filename), () => {
-  /* Runs before all tests . Opens the database connection. */
-  before((done) => {
-    db.connect()
-    .then(() => done())
-    .catch((error) => {
-      chai.expect(error.message).to.equal(null);
-      done();
-    });
-  });
-
-  /* Runs after all tests. Close database connection. */
-  after((done) => {
-    db.disconnect()
-    .then(() => done())
-    .catch((error) => {
-      chai.expect(error.message).to.equal(null);
-      done();
-    });
-  });
-
   /* Execute the tests */
   it('clean database', cleanDB);
+  it('should initialize the server data model', initServerDataModel);
 });
 
 /* --------------------( Tests )-------------------- */
 /**
- * @description Cleans out the database by removing all
- * items from all MongoDB collections.
+ * @description Cleans out the database by removing all items from all
+ * collections.
  */
-function cleanDB(done) {
-  mongoose.connection.db.dropDatabase()
-  .then(() => mongoose.connection.db.createCollection('server_data'))
-  .then(() => mongoose.connection.db.collection('server_data')
-  .insertOne({ version: M.schemaVersion }))
-  .then(() => done())
-  .catch(error => {
-    M.log.error(error);
+async function cleanDB() {
+  try {
+    await db.clear();
+  }
+  catch (error) {
+    M.log.critical('Failed to clean the database.');
     // Expect no error
     chai.expect(error).to.equal(null);
-    done();
-  });
+  }
+}
+
+/**
+ * @description Initializes the server data model and inserts the single server
+ * data document.
+ * @async
+ *
+ * @returns {Promise} Resolves upon successful insertion of the document.
+ */
+async function initServerDataModel() {
+  try {
+    await ServerData.init();
+    await ServerData.insertMany({ _id: 'server_data', version: M.version });
+  }
+  catch (error) {
+    M.log.critical('Failed to insert server data document.');
+    // Expect no error
+    chai.expect(error).to.equal(null);
+  }
 }

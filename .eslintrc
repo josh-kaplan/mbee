@@ -18,23 +18,31 @@
 
 {
   "parserOptions": {
-    "ecmaVersion": 6,
+    "ecmaVersion": 2018,
     "sourceType": "module",
     "ecmaFeatures": {
       "generators": false,
-      "objectLiteralDuplicateProperties": false
+      "objectLiteralDuplicateProperties": false,
+      "jsx": true
     }
   },
 
   "env": {
     "es6": true,
     "node": true,
-    "mocha": true
+    "mocha": true,
+    "browser": true,
+    "jquery": true
   },
 
   "globals": {
     "M": false
   },
+
+  "plugins": [
+    "jsdoc",
+    "security"
+  ],
 
   "rules": {
 
@@ -45,13 +53,13 @@
     // enforces no braces where they can be omitted
     // https://eslint.org/docs/rules/arrow-body-style
     "arrow-body-style": ["warn", "as-needed", {
-      "requireReturnForObjectLiteral": false,
+      "requireReturnForObjectLiteral": false
     }],
 
     // require parens in arrow function arguments
     // https://eslint.org/docs/rules/arrow-parens
     "arrow-parens": ["off", "as-needed", {
-      "requireForBlockBody": true,
+      "requireForBlockBody": true
     }],
 
     // require space before/after arrow function"s arrow
@@ -72,7 +80,7 @@
     // disallow arrow functions where they could be confused with comparisons
     // https://eslint.org/docs/rules/no-confusing-arrow
     "no-confusing-arrow": ["error", {
-      "allowParens": true,
+      "allowParens": true
     }],
 
     // disallow modifying variables that are declared using const
@@ -115,7 +123,7 @@
     "no-useless-rename": ["error", {
       "ignoreDestructuring": false,
       "ignoreImport": false,
-      "ignoreExport": false,
+      "ignoreExport": false
     }],
 
     // require let or const instead of var
@@ -128,13 +136,13 @@
     // suggest using arrow functions as callbacks
     "prefer-arrow-callback": ["off", {
       "allowNamedFunctions": false,
-      "allowUnboundThis": false,
+      "allowUnboundThis": false
     }],
 
     // suggest using of const declaration for variables that are never modified after declared
     "prefer-const": ["error", {
       "destructuring": "any",
-      "ignoreReadBeforeAssign": true,
+      "ignoreReadBeforeAssign": true
     }],
 
     // Prefer destructuring from arrays and objects
@@ -142,14 +150,14 @@
     "prefer-destructuring": ["off", {
       "VariableDeclarator": {
         "array": false,
-        "object": true,
+        "object": true
       },
       "AssignmentExpression": {
         "array": true,
-        "object": true,
-      },
+        "object": true
+      }
     }, {
-      "enforceForRenamedProperties": false,
+      "enforceForRenamedProperties": false
     }],
 
     // disallow parseInt() in favor of binary, octal, and hexadecimal literals
@@ -185,7 +193,7 @@
     "sort-imports": ["off", {
       "ignoreCase": false,
       "ignoreMemberSort": false,
-      "memberSyntaxSortOrder": ["none", "all", "multiple", "single"],
+      "memberSyntaxSortOrder": ["none", "all", "multiple", "single"]
     }],
 
     // require a Symbol description
@@ -255,12 +263,10 @@
 
     // enforce line breaks after opening and before closing array brackets
     // https://eslint.org/docs/rules/array-bracket-newline
-    // "TODO": enable? semver-major
     "array-bracket-newline": ["off", "consistent"], // object option "alternative": { "multiline": true, "minItems": 3 }
 
     // enforce line breaks between array elements
     // https://eslint.org/docs/rules/array-element-newline
-    // "TODO": enable? semver-major
     "array-element-newline": ["off", { "multiline": true, "minItems": 3 }],
 
     // enforce spacing inside array brackets
@@ -282,13 +288,13 @@
       "line": {
         "ignorePattern": ".*",
         "ignoreInlineComments": true,
-        "ignoreConsecutiveComments": true,
+        "ignoreConsecutiveComments": true
       },
       "block": {
         "ignorePattern": ".*",
         "ignoreInlineComments": true,
-        "ignoreConsecutiveComments": true,
-      },
+        "ignoreConsecutiveComments": true
+      }
     }],
 
     // require trailing commas in multiline object literals when set to "always-multiline"
@@ -297,7 +303,7 @@
       "objects": "never",
       "imports": "never",
       "exports": "never",
-      "functions": "never",
+      "functions": "never"
     }],
 
     // enforce spacing before and after comma
@@ -316,7 +322,7 @@
         "ObjectExpression": false,
         "ObjectPattern": false,
         "VariableDeclaration": false,
-        "NewExpression": false,
+        "NewExpression": false
       }
     }],
 
@@ -427,11 +433,10 @@
 
     // enforce position of line comments
     // https://eslint.org/docs/rules/line-comment-position
-    // "TODO": enable?
     "line-comment-position": ["off", {
       "position": "above",
       "ignorePattern": "",
-      "applyDefaultPatterns": true,
+      "applyDefaultPatterns": true
     }],
 
     // disallow mixed "LF" and "CRLF" as linebreaks
@@ -463,7 +468,7 @@
     // https://eslint.org/docs/rules/lines-around-directive
     "lines-around-directive": ["error", {
       "before": "always",
-      "after": "always",
+      "after": "always"
     }],
 
     // specify the maximum depth that blocks can be nested
@@ -476,7 +481,7 @@
       "ignoreComments": false,
       "ignoreRegExpLiterals": true,
       "ignoreStrings": true,
-      "ignoreTemplateLiterals": true,
+      "ignoreTemplateLiterals": true
     }],
 
     // specify the max number of lines in a file
@@ -506,7 +511,6 @@
 
     // require multiline ternary
     // https://eslint.org/docs/rules/multiline-ternary
-    // "TODO": enable?
     "multiline-ternary": ["off", "never"],
 
     // require a capital letter for constructors
@@ -514,7 +518,7 @@
       "newIsCap": true,
       "newIsCapExceptions": [],
       "capIsNew": false,
-      "capIsNewExceptions": ["Immutable.Map", "Immutable.Set", "Immutable.List"],
+      "capIsNewExceptions": ["Immutable.Map", "Immutable.Set", "Immutable.List"]
     }],
 
     // disallow the omission of parentheses when invoking a constructor with no arguments
@@ -603,20 +607,20 @@
       "warn",
       {
         "selector": "ForInStatement",
-        "message": "for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array.",
+        "message": "for..in loops iterate over the entire prototype chain, which is virtually never what you want. Use Object.{keys,values,entries}, and iterate over the resulting array."
       },
       {
         "selector": "ForOfStatement",
-        "message": "iterators/generators require regenerator-runtime, which is too heavyweight for this guide to allow them. Separately, loops should be avoided in favor of array iterations.",
+        "message": "iterators/generators require regenerator-runtime, which is too heavyweight for this guide to allow them. Separately, loops should be avoided in favor of array iterations."
       },
       {
         "selector": "LabeledStatement",
-        "message": "Labels are a form of GOTO; using them makes code confusing and hard to maintain and understand.",
+        "message": "Labels are a form of GOTO; using them makes code confusing and hard to maintain and understand."
       },
       {
         "selector": "WithStatement",
-        "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize.",
-      },
+        "message": "`with` is disallowed in strict mode because it makes code impossible to predict and optimize."
+      }
     ],
 
     // disallow space between function identifier and application
@@ -631,7 +635,7 @@
     // disallow trailing whitespace at the end of lines
     "no-trailing-spaces": ["error", {
       "skipBlankLines": false,
-      "ignoreComments": false,
+      "ignoreComments": false
     }],
 
     // disallow dangling underscores in identifiers
@@ -639,7 +643,7 @@
       "allow": [],
       "allowAfterThis": false,
       "allowAfterSuper": false,
-      "enforceInMethodNames": false,
+      "enforceInMethodNames": false
     }],
 
     // disallow the use of Boolean literals in conditional expressions
@@ -664,13 +668,13 @@
       "ObjectExpression": { "minProperties": 4, "multiline": true, "consistent": true },
       "ObjectPattern": { "minProperties": 4, "multiline": true, "consistent": true },
       "ImportDeclaration": { "minProperties": 4, "multiline": true, "consistent": true },
-      "ExportDeclaration": { "minProperties": 4, "multiline": true, "consistent": true },
+      "ExportDeclaration": { "minProperties": 4, "multiline": true, "consistent": true }
     }],
 
     // enforce "same line" or "multiple line" on object properties.
     // https://eslint.org/docs/rules/object-property-newline
     "object-property-newline": ["error", {
-      "allowAllPropertiesOnSameLine": true,
+      "allowAllPropertiesOnSameLine": true
     }],
 
     // allow just one var statement per function
@@ -749,7 +753,7 @@
       "words": true,
       "nonwords": false,
       "overrides": {
-      },
+      }
     }],
 
     // require or disallow a space immediately following the // or /* in a comment
@@ -757,12 +761,12 @@
     "spaced-comment": ["error", "always", {
       "line": {
         "exceptions": ["-", "+"],
-        "markers": ["=", "!"], // space here to support sprockets directives
+        "markers": ["=", "!"] // space here to support sprockets directives
       },
       "block": {
         "exceptions": ["-", "+", "*"],
         "markers": ["=", "!"], // space here to support sprockets directives
-        "balanced": true,
+        "balanced": true
       }
     }],
 
@@ -800,6 +804,8 @@
     "no-label-var": "error",
 
     // disallow specific globals
+    // Use Number.isNaN instead of global isNaN. The global isNaN coerces
+    // non-numbers to numbers, returning true for anything that coerces to NaN.
     "no-restricted-globals": ["error", "isFinite", "isNaN"],
 
     // disallow declaration of variables already declared in the outer scope
@@ -816,7 +822,6 @@
 
     // disallow use of undefined variable
     // https://eslint.org/docs/rules/no-undefined
-    // "TODO": enable?
     "no-undefined": "off",
 
     // disallow declaration of variables that are not used in the code
@@ -833,6 +838,168 @@
       "variables": true
     }],
 
+
+    ////////////////////////////////////////////////////////////////////////////
+    /// JSDOC
+    ////////////////////////////////////////////////////////////////////////////
+
+    // Checks alignment of asterisks in JSDoc comments
+    "jsdoc/check-alignment": "error",
+
+    // This would ensure that examples in JSDoc comments adhere to ESLint rules
+    "jsdoc/check-examples": "off",
+
+    // This would enforce strict indentation rules in the JSDoc block
+    "jsdoc/check-indentation": "off",
+
+    // Ensures that parameter names in JSDoc match those in the function declaration
+    "jsdoc/check-param-names": "error",
+
+    // Reports against Google Closure Compiler syntax
+    "jsdoc/check-syntax": "error",
+
+    // Reports invalid block tag names.  We have defined additional custom tags below.
+    "jsdoc/check-tag-names": ["error", {"definedTags":  [
+      "owner", "swagger", "classification", "memberOf"
+    ]}],
+
+    // Reports invalid types
+    "jsdoc/check-types": "error",
+
+    // Reports an issue with any non-constructor function using @implements
+    "jsdoc/implements-on-classes": "warn",
+
+    // Enforces a regular expression pattern on descriptions
+    "jsdoc/match-description": ["error", {"tags": {
+      "param": true,
+      "property": true,
+      "returns": true
+    }}],
+
+    //Enforces a consistent padding of the block description
+    "jsdoc/newline-after-description": "error",
+
+    // This would disallow types being used with @params and @returns tags
+    "jsdoc/no-types": "off",
+
+    // Checks that types in JSDoc comments are valid.  We have included additional custom types below.
+    "jsdoc/no-undefined-types": ["error", {
+      "definedTypes": [
+        "DataFormatError",
+        "AuthorizationError",
+        "PermissionError",
+        "OperationError",
+        "NotFoundError",
+        "BrewingError",
+        "ServerError",
+        "DatabaseError",
+        "NotImplementedError",
+        "Model",
+        "User",
+        "Organization",
+        "Project",
+        "Branch",
+        "Element",
+        "Artifact"]
+    }],
+
+    // Requires a description in JSDoc comments
+    "jsdoc/require-description": ["error", {
+      "descriptionStyle": "tag"
+    }],
+
+    // Requires that block description, explicit @description, and @param/@returns tag descriptions are complete sentences.
+    "jsdoc/require-description-complete-sentence": ["error", {"tags": [
+      "param", "property", "returns"
+    ]}],
+
+    // This would require that all functions have examples
+    "jsdoc/require-example": "off",
+
+    // Requires a '-' before param description
+    "jsdoc/require-hyphen-before-param-description": "error",
+
+    // Requires a JSDoc for every function
+    "jsdoc/require-jsdoc": "error",
+
+    // Requires a @param entry in the JSDoc for every param in the function
+    "jsdoc/require-param": "error",
+
+    // Requires a param description in the JSDoc for every param
+    "jsdoc/require-param-description": "error",
+
+    // Requires a param name in the JSDoc for every param
+    "jsdoc/require-param-name": "error",
+
+    // Requires a param type in the JSDoc for every param
+    "jsdoc/require-param-type": "error",
+
+    // Requires a @returns description in the JSDoc if the function has a return statement
+    "jsdoc/require-returns": "error",
+
+    // Check that the function has a return statement if the JSDoc has a @returns tag
+    "jsdoc/require-returns-check": "error",
+
+    // Requires that the @returns tag has an actual description
+    "jsdoc/require-returns-description": "error",
+
+    // Requires the @returns tag to specify a type
+    "jsdoc/require-returns-type": "error",
+
+    // Requires all types to be valid JSDoc or Closure compiler types without syntax errors
+    "jsdoc/valid-types": "warn",
+
+
+    ////////////////////////////////////////////////////////////////////////////
+    /// Security
+    ////////////////////////////////////////////////////////////////////////////
+
+    // Locates potentially unsafe regular expressions, which may take a very
+    // long time to run, blocking the event loop.
+    "security/detect-unsafe-regex": "warn",
+
+    // Detects calls to buffer with noAssert flag set
+    "security/detect-buffer-noassert": "error",
+
+    // Detects instances of child_process & non-literal exec()
+    "security/detect-child-process": "off",
+
+    // Detects object.escapeMarkup = false, which can be used with some template
+    // engines to disable escaping of HTML entities. This can lead to Cross-Site
+    // Scripting (XSS) vulnerabilities.
+    "security/detect-disable-mustache-escape": "error",
+
+    // Detects eval(variable) which can allow an attacker to run arbitary code
+    // inside your process.
+    "security/detect-eval-with-expression": "error",
+
+    // Detects Express csrf middleware setup before method-override middleware.
+    // This can allow GET requests (which are not checked by csrf) to turn into
+    // POST requests later.
+    "security/detect-no-csrf-before-method-override": "error",
+
+    // Detects variable in filename argument of fs calls, which might allow an
+    // attacker to access anything on your system.
+    "security/detect-non-literal-fs-filename": "off",
+
+    // Detects RegExp(variable), which might allow an attacker to DOS your
+    // server with a long-running regular expression.
+    "security/detect-non-literal-regexp": "error",
+
+    // Detects require(variable), which might allow an attacker to load and run
+    // arbitrary code, or access arbitrary files on disk.
+    "security/detect-non-literal-require": "off",
+
+    // Detects variable[key] as a left- or right-hand assignment operand.
+    "security/detect-object-injection": "off",
+
+    // Detects insecure comparisons (==, !=, !== and ===), which check input
+    // sequentially.
+    "security/detect-possible-timing-attacks": "error",
+
+    // Detects if pseudoRandomBytes() is in use, which might not give you the
+    // randomness you need and expect.
+    "security/detect-pseudoRandomBytes": "error",
 
     ////////////////////////////////////////////////////////////////////////////
     /// ERRORS
@@ -898,7 +1065,7 @@
       "nestedBinaryExpressions": false,
       "returnAssign": false,
       "ignoreJSX": "all", // delegate to eslint-plugin-react
-      "enforceForArrowConditionals": false,
+      "enforceForArrowConditionals": false
     }],
 
     // disallow unnecessary semicolons
@@ -983,7 +1150,10 @@
     // enforce that class methods use "this"
     // https://eslint.org/docs/rules/class-methods-use-this
     "class-methods-use-this": ["error", {
-      "exceptMethods": [],
+      "exceptMethods": [
+        "componentDidMount",
+        "render"
+      ]
     }],
 
     // require return statements to either always or never specify values
@@ -1025,7 +1195,7 @@
 
     // disallow else after a return in an if
     // https://eslint.org/docs/rules/no-else-return
-    "no-else-return": ["error", { "allowElseIf": false }],
+    "no-else-return": ["off", { "allowElseIf": false }],
 
     // disallow empty functions, except for standalone funcs/arrows
     // https://eslint.org/docs/rules/no-empty-function
@@ -1033,7 +1203,7 @@
       "allow": [
         "arrowFunctions",
         "functions",
-        "methods",
+        "methods"
       ]
     }],
 
@@ -1075,7 +1245,7 @@
       "boolean": false,
       "number": true,
       "string": true,
-      "allow": [],
+      "allow": []
     }],
 
     // disallow var and named functions in global scope
@@ -1106,12 +1276,12 @@
       "ignore": [],
       "ignoreArrayIndexes": true,
       "enforceConst": true,
-      "detectObjects": false,
+      "detectObjects": false
     }],
 
     // disallow use of multiple spaces
     "no-multi-spaces": ["error", {
-      "ignoreEOLComments": true,
+      "ignoreEOLComments": true
     }],
 
     // disallow use of multiline strings
@@ -1150,41 +1320,41 @@
     "no-restricted-properties": ["error", {
       "object": "arguments",
       "property": "callee",
-      "message": "arguments.callee is deprecated",
+      "message": "arguments.callee is deprecated"
     }, {
       "object": "global",
       "property": "isFinite",
-      "message": "Please use Number.isFinite instead",
+      "message": "Please use Number.isFinite instead"
     }, {
       "object": "self",
       "property": "isFinite",
-      "message": "Please use Number.isFinite instead",
+      "message": "Please use Number.isFinite instead"
     }, {
       "object": "window",
       "property": "isFinite",
-      "message": "Please use Number.isFinite instead",
+      "message": "Please use Number.isFinite instead"
     }, {
       "object": "global",
       "property": "isNaN",
-      "message": "Please use Number.isNaN instead",
+      "message": "Please use Number.isNaN instead"
     }, {
       "object": "self",
       "property": "isNaN",
-      "message": "Please use Number.isNaN instead",
+      "message": "Please use Number.isNaN instead"
     }, {
       "object": "window",
       "property": "isNaN",
-      "message": "Please use Number.isNaN instead",
+      "message": "Please use Number.isNaN instead"
     }, {
       "property": "__defineGetter__",
-      "message": "Please use Object.defineProperty instead.",
+      "message": "Please use Object.defineProperty instead."
     }, {
       "property": "__defineSetter__",
-      "message": "Please use Object.defineProperty instead.",
+      "message": "Please use Object.defineProperty instead."
     }, {
       "object": "Math",
       "property": "pow",
-      "message": "Use the exponentiation operator (**) instead.",
+      "message": "Use the exponentiation operator (**) instead."
     }],
 
     // disallow use of assignment in return statement
@@ -1217,7 +1387,7 @@
     "no-unused-expressions": ["error", {
       "allowShortCircuit": false,
       "allowTernary": false,
-      "allowTaggedTemplates": false,
+      "allowTaggedTemplates": false
     }],
 
     // disallow unused labels
@@ -1256,7 +1426,7 @@
     // require use of the second argument for parseInt()
     "radix": "error",
 
-    // require `await` in `async function` "(note": this is a horrible rule that should never be used)
+    // require `await` in `async function` (note: this is a horrible rule that should never be used)
     // https://eslint.org/docs/rules/require-await
     "require-await": "off",
 

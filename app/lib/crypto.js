@@ -1,5 +1,5 @@
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
  * @module lib.crypto
  *
@@ -7,23 +7,37 @@
  *
  * @license MIT
  *
+ * @owner Phillip Lee
+ *
+ * @author Josh Kaplan
+ *
  * @description Defines common cryptographic functions.
  */
 
 // Node modules
 const crypto = require('crypto');  // NOTE: Refers to standard node crypto library
 
+// Create an Initialization Vector (IV) of 16 random bytes for the createCipheriv
+// and createDecipheriv functions
+const iv = crypto.randomBytes(16);
+// Set the length of the secret key in bytes
+const keyLength = 32;
+// Generate a cryptographic key in buffer form from the secret in the config.
+// Limit size of the buffer to the specified key length.
+const key = Buffer.concat([Buffer.from(M.config.server.secret)], keyLength);
+
+
 /**
  * @description Encrypts data with AES-256 using the app secret and returns the
  * encrypted data as a base64 encoded string.
  *
- * @params {string} data - Data to be encrypted
+ * @param {string} data - Data to be encrypted.
  *
- * @return {string} Encrypted data
+ * @returns {string} Encrypted data.
  */
 module.exports.encrypt = function encrypt(data) {
-  const secret = M.config.server.secret;
-  const cipher = crypto.createCipher('aes-256-cbc', secret);
+  // Create aes-256-cbc cipher object using secret key and random initialization vector
+  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
 
   // Encrypt input using aes-256 cipher
   let encrypted = cipher.update(data, 'utf8', 'hex');
@@ -38,19 +52,19 @@ module.exports.encrypt = function encrypt(data) {
  * @description Decrypts data with AES-256. It expects data to be in the same
  * base64 encoded string format returned by encrypt().
  *
- * @param {string} data - Data to be decrypted
+ * @param {string} data - Data to be decrypted.
  *
- * @return {string} Decrypted data
+ * @returns {object} Decrypted data.
  */
 module.exports.decrypt = function decrypt(data) {
   if (data === undefined || data.toString() === '') {
     // NOTE: Changed from returning '{}' to throwing an error
-    throw new M.CustomError(`Can't decrypt ${data}. Returning ...`, 400);
+    throw new M.ServerError('Can\'t decrypt data. Returning ...', 'warn');
   }
 
   try {
-    const secret = M.config.server.secret;
-    const decipher = crypto.createDecipher('aes-256-cbc', secret);
+    // Create aes-256-cbc decipher object using secret key and random initialization vector
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
 
     // Retrieve hex data from base64 encoded string
     const hexData = Buffer.from(data, 'base64').toString('hex');
@@ -66,16 +80,16 @@ module.exports.decrypt = function decrypt(data) {
   catch (error) {
     // Decryption failed, throw an error
     // NOTE: Changed from returning '{}' to throwing an error
-    throw new M.CustomError('Decryption failed.', 400);
+    throw new M.ServerError('Decryption failed.', 'warn');
   }
 };
 
 /**
  * @description Generates token from user data.
  *
- * @params {Object} data - Data to generate token
+ * @param {object} data - Data to generate token.
  *
- * @return {string} Encrypted token
+ * @returns {string} Encrypted token.
  */
 module.exports.generateToken = function generateToken(data) {
   // Return encrypted input
@@ -85,9 +99,9 @@ module.exports.generateToken = function generateToken(data) {
 /**
  * @description Inspects user token.
  *
- * @param {string} token - Token to inspect
+ * @param {string} token - Token to inspect.
  *
- * @return {Object} Decrypted token
+ * @returns {object} Decrypted token.
  */
 module.exports.inspectToken = function inspectToken(token) {
   // Decrypt input and return parsed data
@@ -97,9 +111,9 @@ module.exports.inspectToken = function inspectToken(token) {
 /**
  * @description Performs md5 hash with hex encoding.
  *
- * @params {Object} data - Data to md5 hash
+ * @param {object} data - Data to md5 hash.
  *
- * @return {string} hash of data
+ * @returns {string} Hash of data.
  */
 module.exports.md5Hash = function md5Hash(data) {
   // hash input data and return it
@@ -109,9 +123,9 @@ module.exports.md5Hash = function md5Hash(data) {
 /**
  * @description Performs sha256 hash with hex encoding.
  *
- * @params {Object} data - Data to sha256 hash
+ * @param {object} data - Data to sha256 hash.
  *
- * @return {string} hash of data
+ * @returns {string} Hash of data.
  */
 module.exports.sha256Hash = function sha256Hash(data) {
   // hash input data and return it

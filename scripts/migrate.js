@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * Classification: UNCLASSIFIED
+ * @classification UNCLASSIFIED
  *
- * @module scripts.migrate
+ * @module scripts.migration
  *
  * @copyright Copyright (C) 2018, Lockheed Martin Corporation
  *
  * @license MIT
+ *
+ * @owner Connor Doyle
+ *
+ * @author Austin Bieber
  *
  * @description Supports the ability to migrate the database between specific
  * versions.
@@ -14,7 +18,7 @@
 
 // MBEE modules
 const libMigrate = M.require('lib.migrate');
-const db = M.require('lib.db');
+const db = M.require('db');
 
 /**
  * @description Runs the migrate function from lib.migrate and finished the
